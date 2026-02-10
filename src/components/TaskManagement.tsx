@@ -156,10 +156,6 @@ export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
             <Plus className="h-4 w-4 mr-2" />
             Create Task
           </Button>
-          <Button onClick={() => setShowAddEmployeeDialog(true)} variant="outline">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Employee
-          </Button>
         </div>
       </div>
 
@@ -271,11 +267,11 @@ export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
                   <div className="flex items-center space-x-6 text-sm text-muted-foreground">
                     <div className="flex items-center space-x-1">
                       <Calendar className="h-4 w-4" />
-              <span>Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</span>
+                      <span>Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="h-4 w-4" />
-              <span>{(task.estimatedHours ?? 0)}h estimated</span>
+                      <span>{(task.estimatedHours ?? 0)}h estimated</span>
                     </div>
                     {task.assigned_to && (
                       <div className="flex items-center space-x-1">

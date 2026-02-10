@@ -118,9 +118,9 @@ export function Dashboard({
   const avgAvailability =
     employees.length > 0
       ? Math.round(
-          employees.reduce((acc, emp) => acc + (emp.availability || 0), 0) /
-            employees.length
-        )
+        employees.reduce((acc, emp) => acc + (emp.availability || 0), 0) /
+        employees.length
+      )
       : 0;
 
   const skillGaps = getSkillGaps(employees as any, tasks as any).slice(0, 5);
@@ -182,11 +182,11 @@ export function Dashboard({
         avgAvailability:
           deptEmployees.length > 0
             ? Math.round(
-                deptEmployees.reduce(
-                  (acc, emp) => acc + (emp.availability || 0),
-                  0
-                ) / deptEmployees.length
-              )
+              deptEmployees.reduce(
+                (acc, emp) => acc + (emp.availability || 0),
+                0
+              ) / deptEmployees.length
+            )
             : 0,
       };
     });
@@ -201,115 +201,6 @@ export function Dashboard({
           <p className="text-muted-foreground">
             Welcome to your HRMS dashboard with intelligent task allocation
           </p>
-        </div>
-        <div className="space-x-2">
-          {/* Add Employee Dialog */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Add Employee
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Employee</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Name</Label>
-                  <Input
-                    value={newEmployee.name}
-                    onChange={(e) =>
-                      setNewEmployee({ ...newEmployee, name: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={newEmployee.email}
-                    onChange={(e) =>
-                      setNewEmployee({ ...newEmployee, email: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Department</Label>
-                  <Input
-                    value={newEmployee.department}
-                    onChange={(e) =>
-                      setNewEmployee({
-                        ...newEmployee,
-                        department: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleAddEmployee}>Save</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Create Task Dialog */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Create Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Task</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Title</Label>
-                  <Input
-                    value={newTask.title}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, title: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Input
-                    value={newTask.description}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, description: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Priority</Label>
-                  <Input
-                    value={newTask.priority}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, priority: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Due_date</Label>
-                  <Input
-                    type="date"
-                    value={newTask.due_date}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, due_date: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleCreateTask}>Create</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 

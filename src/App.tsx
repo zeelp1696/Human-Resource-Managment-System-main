@@ -84,7 +84,7 @@ export default function App() {
     setAuthView('login');
     try {
       localStorage.setItem('hrms_user_role', user.role ?? 'employee');
-    } catch {}
+    } catch { }
   };
 
   const handleSignUp = (user: User) => {
@@ -93,7 +93,7 @@ export default function App() {
     setAuthView('login');
     try {
       localStorage.setItem('hrms_user_role', user.role ?? 'employee');
-    } catch {}
+    } catch { }
   };
 
   const handleLogout = () => {
@@ -102,7 +102,7 @@ export default function App() {
     setAuthView('login');
     try {
       localStorage.removeItem('hrms_user_role');
-    } catch {}
+    } catch { }
   };
 
   // ✅ Show login/signup if not authenticated
@@ -187,114 +187,111 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          {/* Sidebar */}
-          <Sidebar>
-            <SidebarHeader className="border-b p-6">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <div>
-                  <h2 className="font-semibold">SmartHRMS</h2>
-                  <p className="text-xs text-muted-foreground">
-                    HR Management Portal
-                  </p>
-                </div>
-              </div>
-            </SidebarHeader>
-
-            <SidebarContent className="p-4">
-              <nav className="space-y-1">
-                {menuItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentPage === item.id;
-                  return (
-                    <Button
-                      key={item.id}
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      className="w-full justify-start"
-                      onClick={() => setCurrentPage(item.id as Page)}
-                    >
-                      <Icon className="h-4 w-4 mr-3" />
-                      {item.label}
-                    </Button>
-                  );
-                })}
-              </nav>
-
-              {/* User info */}
-              <div className="mt-auto pt-4 border-t">
-                <div className="flex items-center space-x-3 p-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>
-                      {authState.user?.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{authState.user?.name}</p>
+          <div className="min-h-screen flex w-full">
+            {/* Sidebar */}
+            <Sidebar>
+              <SidebarHeader className="border-b p-6">
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
+                    <Users className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">SmartHRMS</h2>
                     <p className="text-xs text-muted-foreground">
-                      {authState.user?.position}
+                      HR Management Portal
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4" />
-                  </Button>
                 </div>
-              </div>
-            </SidebarContent>
-          </Sidebar>
+              </SidebarHeader>
 
-          {/* Main content */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <header className="border-b bg-background">
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center space-x-4">
-                  <SidebarTrigger />
-                  <div className="hidden sm:block">
-                    <h1 className="font-semibold capitalize">
-                      {currentPage}
-                    </h1>
+              <SidebarContent className="p-4">
+                <nav className="space-y-1">
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentPage === item.id;
+                    return (
+                      <Button
+                        key={item.id}
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        className="w-full justify-start"
+                        onClick={() => setCurrentPage(item.id as Page)}
+                      >
+                        <Icon className="h-4 w-4 mr-3" />
+                        {item.label}
+                      </Button>
+                    );
+                  })}
+                </nav>
+
+                {/* User info */}
+                <div className="mt-auto pt-4 border-t">
+                  <div className="flex items-center space-x-3 p-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        {authState.user?.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{authState.user?.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {authState.user?.position}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleLogout}>
+                      <LogOut className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
+              </SidebarContent>
+            </Sidebar>
 
-                <div className="flex items-center space-x-4">
-                  <Badge variant="outline">
-                    {authState.user?.department}
-                  </Badge>
-                  <ThemeToggle />
-                  <Button variant="ghost" size="sm">
-                    <Bell className="h-4 w-4" />
-                  </Button>
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{getInitials(authState.user?.name)}</AvatarFallback>
-                  </Avatar>
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{getInitials(authState.user?.name)}</AvatarFallback>
-                  </Avatar>
+            {/* Main content */}
+            <div className="flex-1 flex flex-col min-w-0">
+              <header className="border-b bg-background">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center space-x-4">
+                    <SidebarTrigger />
+                    <div className="hidden sm:block">
+                      <h1 className="font-semibold capitalize">
+                        {currentPage}
+                      </h1>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-4">
+                    <Badge variant="outline">
+                      {authState.user?.department}
+                    </Badge>
+                    <ThemeToggle />
+                    <Button variant="ghost" size="sm">
+                      <Bell className="h-4 w-4" />
+                    </Button>
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{getInitials(authState.user?.name)}</AvatarFallback>
+                    </Avatar>
+                  </div>
                 </div>
-              </div>
-            </header>
+              </header>
 
-            <main className="flex-1 overflow-auto">
-              {isMockMode && (
-                <Alert className="m-4 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20">
-                  <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                  <AlertDescription className="text-orange-800 dark:text-orange-300">
-                    <strong>Demo Mode:</strong> Backend unavailable, using mock
-                    data. All changes are temporary.
-                  </AlertDescription>
-                </Alert>
-              )}
-              {renderPage()}
-            </main>
+              <main className="flex-1 overflow-auto">
+                {isMockMode && (
+                  <Alert className="m-4 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20">
+                    <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <AlertDescription className="text-orange-800 dark:text-orange-300">
+                      <strong>Demo Mode:</strong> Backend unavailable, using mock
+                      data. All changes are temporary.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {renderPage()}
+              </main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
-    </ThemeProvider>
+        </SidebarProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
