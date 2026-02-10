@@ -9,6 +9,7 @@ create table employees (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   email text not null unique,
+  password text,  -- hashed password for custom auth (null for Supabase Auth users)
   role text default 'employee' check (role in ('employee','hr','manager','admin')),
   position text,
   department text,
@@ -103,12 +104,12 @@ insert into skills (name, category) values
 ('JavaScript', 'Technical'),
 ('Communication', 'Soft Skill');
 
--- EMPLOYEES
-insert into employees (name, email, department, role, availability, position, phone, experience, salary, currentTasks)
+-- EMPLOYEES (password for all is: 'password123' - bcrypt hash shown below)
+insert into employees (name, email, password, department, role, availability, position, phone, experience, salary, currentTasks)
 values
-('Preyansh Patel', 'alice@example.com', 'HR', 'hr', 100, 'HR Manager', '9876543210', 5, 60000, 1),
-('Tanay Vakharia', 'bob@example.com', 'Engineering', 'employee', 100, 'Frontend Dev', '9876500001', 2, 45000, 1),
-('Riddhi Rawal', 'charlie@example.com', 'Operations', 'employee', 100, 'Designer', '9876500002', 3, 40000, 1);
+('Preyansh Patel', 'alice@example.com', '$2a$10$KqCSHYMQKZL1HJXB8BxS0.ZKBk8TF8FnY5Zr2rKiZy2xqJ9VQ8Cxe', 'HR', 'hr', 100, 'HR Manager', '9876543210', 5, 60000, 1),
+('Tanay Vakharia', 'bob@example.com', '$2a$10$KqCSHYMQKZL1HJXB8BxS0.ZKBk8TF8FnY5Zr2rKiZy2xqJ9VQ8Cxe', 'Engineering', 'employee', 100, 'Frontend Dev', '9876500001', 2, 45000, 1),
+('Riddhi Rawal', 'charlie@example.com', '$2a$10$KqCSHYMQKZL1HJXB8BxS0.ZKBk8TF8FnY5Zr2rKiZy2xqJ9VQ8Cxe', 'Operations', 'employee', 100, 'Designer', '9876500002', 3, 40000, 1);
 
 -- EMPLOYEE SKILLS
 insert into employee_skills (employee_id, skill_id, level) values

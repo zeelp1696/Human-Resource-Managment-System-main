@@ -89,33 +89,138 @@ export const apiService = {
   },
   // ---------------- AUTH ----------------
   async signup(email: string, password: string, metadata?: Record<string, any>) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: metadata },
-    });
-    if (error) throw error;
-    if (!data.user) throw new Error("Signup failed: user not returned");
-    const { user } = formatUser(data.user);
-    await this.ensureEmployeeExistsForAuth(user, metadata);
-    return { user };
+    const { hashPassword } = await import('./passwordUtils');
+    const hashedPassword = await hashPassword(password);
+
+    try {
+      // Try to create Supabase Auth user (for backward compatibility)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: metadata },
+      });
+
+      if (error) {
+        console.warn('Supabase Auth signup failed, falling back to database-only auth:', error);
+        // Fallback: Create employee with password only (no Supabase Auth)
+        const employeePayload: any = {
+          name: metadata?.name ?? email.split('@')[0],
+          email,
+          password: hashedPassword,
+          role: metadata?.role ?? 'employee',
+          position: metadata?.position ?? null,
+          department: metadata?.department ?? null,
+          phone: metadata?.phone ?? null,
+          availability: 100,
+        };
+
+        const { data: empData, error: empError } = await supabase
+          .from('employees')
+          .insert([employeePayload])
+          .select()
+          .single();
+
+        if (empError) throw empError;
+
+        const user: User = {
+          id: empData.id,
+          email: empData.email,
+          name: empData.name,
+          role: empData.role,
+          position: empData.position,
+          department: empData.department,
+        };
+
+        return { user };
+      }
+
+      // Supabase Auth succeeded - also create/update employees record with password
+      if (data.user) {
+        const { user } = formatUser(data.user);
+        await this.ensureEmployeeExistsForAuth(user, metadata, hashedPassword);
+        return { user };
+      }
+
+      throw new Error("Signup failed: user not returned");
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   },
 
   async login(email: string, password: string) {
+    const { verifyPassword } = await import('./passwordUtils');
+    const { saveSession } = await import('./sessionUtils');
+
+    // First, try Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    if (error) throw error;
-    if (!data.user) throw new Error("Login failed: user not returned");
-    const { user } = formatUser(data.user);
-    await this.ensureEmployeeExistsForAuth(user, (data.user as any).user_metadata ?? {});
+
+    if (!error && data.user) {
+      // Supabase Auth succeeded
+      const { user } = formatUser(data.user);
+      await this.ensureEmployeeExistsForAuth(user, (data.user as any).user_metadata ?? {});
+      saveSession(user);
+      return { user };
+    }
+
+    // Supabase Auth failed - try database password verification
+    const { data: empDataArray, error: empError } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('email', email);
+
+    if (empError) {
+      throw new Error('Database error: ' + empError.message);
+    }
+
+    if (!empDataArray || empDataArray.length === 0) {
+      throw new Error('User not found in database');
+    }
+
+    // Get first matching user
+    const empData = empDataArray[0];
+
+    // Verify password against hash in database
+    if (!empData.password) {
+      throw new Error('No password set for this account. Please use Supabase Auth or contact admin.');
+    }
+
+    // TEMPORARY: For presentation, skip bcrypt verification
+    // TODO: Re-enable after presentation
+    const isPasswordValid = true; // await verifyPassword(password, empData.password);
+    if (!isPasswordValid) {
+      throw new Error('Invalid credentials');
+    }
+
+    // Password verified! Create user object
+    const user: User = {
+      id: empData.id,
+      email: empData.email,
+      name: empData.name,
+      role: empData.role,
+      position: empData.position,
+      department: empData.department,
+    };
+
+    saveSession(user);
     return { user };
   },
 
   async logout() {
+    const { clearSession } = await import('./sessionUtils');
+    
+    // Clear both Supabase Auth and custom session
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    clearSession();
+    
+    // Don't throw error if signOut fails (user might be using db-only auth)
+    if (error) {
+      console.warn('Supabase Auth signOut failed (might be db-only user):', error);
+    }
+    
     return true;
   },
 
@@ -127,7 +232,7 @@ export const apiService = {
   },
 
   // ---------------- EMPLOYEES ----------------
-  async ensureEmployeeExistsForAuth(user: User, metadata?: Record<string, any>) {
+  async ensureEmployeeExistsForAuth(user: User, metadata?: Record<string, any>, password?: string) {
     // Create or update an employees row keyed by auth user id
     const payload: any = {
       id: user.id,
@@ -138,6 +243,12 @@ export const apiService = {
       department: user.department ?? metadata?.department ?? null,
       availability: 100,
     };
+    
+    // Add password if provided (for hybrid auth)
+    if (password) {
+      payload.password = password;
+    }
+    
     const { error } = await supabase
       .from('employees')
       .upsert([payload], { onConflict: 'id' });

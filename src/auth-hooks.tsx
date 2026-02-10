@@ -106,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const demo = id === '1'
               ? { id: '1', email: 'hr@company.com', name: 'HR Manager', position: 'HR Manager', role: 'manager', skills: [], department: 'Human Resources', created_at: now, updated_at: now }
               : id === '2'
-              ? { id: '2', email: 'employee@company.com', name: 'John Doe', position: 'Software Engineer', role: 'employee', skills: [], department: 'Engineering', created_at: now, updated_at: now }
-              : null
+                ? { id: '2', email: 'employee@company.com', name: 'John Doe', position: 'Software Engineer', role: 'employee', skills: [], department: 'Engineering', created_at: now, updated_at: now }
+                : null
             if (demo) {
               setUser(demo as User)
               setSupabaseUser(null)
@@ -163,6 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clear demo token if present
       if (typeof window !== 'undefined') {
         localStorage.removeItem('authToken')
+        const { clearSession } = await import('./utils/sessionUtils');
+        clearSession();
       }
       // User will be cleared through the auth state change listener
     } catch (error) {
@@ -173,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (updates: Partial<User>) => {
     if (!user) throw new Error('No user logged in')
-    
+
     try {
       const updatedUser = await apiService.updateUser(user.id, updates)
       setUser(updatedUser)
@@ -206,7 +208,7 @@ export function useAuth() {
 // Hook for protecting routes
 export function useRequireAuth() {
   const { user, loading } = useAuth()
-  
+
   useEffect(() => {
     if (!loading && !user) {
       // Redirect to login or show login modal
