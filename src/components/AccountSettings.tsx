@@ -11,15 +11,15 @@ import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Camera, 
-  Lock, 
-  Bell, 
-  Shield, 
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Camera,
+  Lock,
+  Bell,
+  Shield,
   Palette,
   Save,
   Eye,
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { User as AuthUser } from '../types/auth';
 import { toast } from 'sonner';
+import { apiService } from '../utils/api';
 
 interface AccountSettingsProps {
   user: AuthUser;
@@ -110,11 +111,20 @@ export function AccountSettings({ user }: AccountSettingsProps) {
     }
 
     setIsSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSaving(false);
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    toast.success('Password changed successfully!');
+    try {
+      await apiService.updatePassword(
+        user.id,
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password changed successfully!');
+    } catch (error) {
+      console.error('Password update failed:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update password');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveNotifications = async () => {
@@ -218,18 +228,18 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   <Input
                     id="name"
                     value={profileData.name}
-                    onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
                     disabled={!isEditing}
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
                   <Input
                     id="email"
                     type="email"
                     value={profileData.email}
-                    onChange={(e) => setProfileData({...profileData, email: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
                     disabled={!isEditing}
                   />
                 </div>
@@ -239,7 +249,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   <Input
                     id="phone"
                     value={profileData.phone}
-                    onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
                     disabled={!isEditing}
                   />
                 </div>
@@ -249,7 +259,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   <Input
                     id="location"
                     value={profileData.location}
-                    onChange={(e) => setProfileData({...profileData, location: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
                     disabled={!isEditing}
                   />
                 </div>
@@ -276,7 +286,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   <Label htmlFor="timezone">Timezone</Label>
                   <Select
                     value={profileData.timezone}
-                    onValueChange={(value: string) => setProfileData({...profileData, timezone: value})}
+                    onValueChange={(value: string) => setProfileData({ ...profileData, timezone: value })}
                     disabled={!isEditing}
                   >
                     <SelectTrigger>
@@ -295,7 +305,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   <Label htmlFor="language">Language</Label>
                   <Select
                     value={profileData.language}
-                    onValueChange={(value: string) => setProfileData({...profileData, language: value})}
+                    onValueChange={(value: string) => setProfileData({ ...profileData, language: value })}
                     disabled={!isEditing}
                   >
                     <SelectTrigger>
@@ -316,7 +326,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 <Textarea
                   id="bio"
                   value={profileData.bio}
-                  onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
+                  onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
                   disabled={!isEditing}
                   rows={3}
                   placeholder="Tell us about yourself..."
@@ -355,7 +365,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                     id="currentPassword"
                     type={showCurrentPassword ? 'text' : 'password'}
                     value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                   />
                   <Button
                     type="button"
@@ -376,7 +386,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                     id="newPassword"
                     type={showNewPassword ? 'text' : 'password'}
                     value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                   />
                   <Button
                     type="button"
@@ -400,7 +410,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                   />
                   <Button
                     type="button"
@@ -438,8 +448,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={securitySettings.twoFactorEnabled}
-                  onCheckedChange={(checked: boolean) => 
-                    setSecuritySettings({...securitySettings, twoFactorEnabled: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setSecuritySettings({ ...securitySettings, twoFactorEnabled: checked })
                   }
                 />
               </div>
@@ -450,8 +460,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
                 <Select
                   value={securitySettings.sessionTimeout}
-                  onValueChange={(value: string) => 
-                    setSecuritySettings({...securitySettings, sessionTimeout: value})
+                  onValueChange={(value: string) =>
+                    setSecuritySettings({ ...securitySettings, sessionTimeout: value })
                   }
                 >
                   <SelectTrigger>
@@ -476,8 +486,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={securitySettings.loginNotifications}
-                  onCheckedChange={(checked: boolean) => 
-                    setSecuritySettings({...securitySettings, loginNotifications: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setSecuritySettings({ ...securitySettings, loginNotifications: checked })
                   }
                 />
               </div>
@@ -491,8 +501,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={securitySettings.suspiciousActivityAlerts}
-                  onCheckedChange={(checked: boolean) => 
-                    setSecuritySettings({...securitySettings, suspiciousActivityAlerts: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setSecuritySettings({ ...securitySettings, suspiciousActivityAlerts: checked })
                   }
                 />
               </div>
@@ -523,8 +533,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={notifications.emailNotifications}
-                  onCheckedChange={(checked: boolean) => 
-                    setNotifications({...notifications, emailNotifications: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setNotifications({ ...notifications, emailNotifications: checked })
                   }
                 />
               </div>
@@ -538,8 +548,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={notifications.pushNotifications}
-                  onCheckedChange={(checked: boolean) => 
-                    setNotifications({...notifications, pushNotifications: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setNotifications({ ...notifications, pushNotifications: checked })
                   }
                 />
               </div>
@@ -548,7 +558,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
 
               <div className="space-y-4">
                 <h4 className="font-medium">Notification Types</h4>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Task Assignments</Label>
@@ -558,8 +568,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   </div>
                   <Switch
                     checked={notifications.taskAssignments}
-                    onCheckedChange={(checked: boolean) => 
-                      setNotifications({...notifications, taskAssignments: checked})
+                    onCheckedChange={(checked: boolean) =>
+                      setNotifications({ ...notifications, taskAssignments: checked })
                     }
                   />
                 </div>
@@ -574,8 +584,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                     </div>
                     <Switch
                       checked={notifications.leaveRequests}
-                      onCheckedChange={(checked: boolean) => 
-                        setNotifications({...notifications, leaveRequests: checked})
+                      onCheckedChange={(checked: boolean) =>
+                        setNotifications({ ...notifications, leaveRequests: checked })
                       }
                     />
                   </div>
@@ -590,8 +600,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   </div>
                   <Switch
                     checked={notifications.systemUpdates}
-                    onCheckedChange={(checked: boolean) => 
-                      setNotifications({...notifications, systemUpdates: checked})
+                    onCheckedChange={(checked: boolean) =>
+                      setNotifications({ ...notifications, systemUpdates: checked })
                     }
                   />
                 </div>
@@ -605,8 +615,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   </div>
                   <Switch
                     checked={notifications.weeklyReports}
-                    onCheckedChange={(checked: boolean) => 
-                      setNotifications({...notifications, weeklyReports: checked})
+                    onCheckedChange={(checked: boolean) =>
+                      setNotifications({ ...notifications, weeklyReports: checked })
                     }
                   />
                 </div>
@@ -620,8 +630,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                   </div>
                   <Switch
                     checked={notifications.securityAlerts}
-                    onCheckedChange={(checked: boolean) => 
-                      setNotifications({...notifications, securityAlerts: checked})
+                    onCheckedChange={(checked: boolean) =>
+                      setNotifications({ ...notifications, securityAlerts: checked })
                     }
                   />
                 </div>
@@ -648,7 +658,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 <Label htmlFor="theme">Theme</Label>
                 <Select
                   value={themeSettings.theme}
-                  onValueChange={(value: string) => setThemeSettings({...themeSettings, theme: value})}
+                  onValueChange={(value: string) => setThemeSettings({ ...themeSettings, theme: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -665,7 +675,7 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 <Label htmlFor="sidebar">Sidebar</Label>
                 <Select
                   value={themeSettings.sidebar}
-                  onValueChange={(value: string) => setThemeSettings({...themeSettings, sidebar: value})}
+                  onValueChange={(value: string) => setThemeSettings({ ...themeSettings, sidebar: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -687,8 +697,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={themeSettings.compactMode}
-                  onCheckedChange={(checked: boolean) => 
-                    setThemeSettings({...themeSettings, compactMode: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setThemeSettings({ ...themeSettings, compactMode: checked })
                   }
                 />
               </div>
@@ -702,8 +712,8 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 </div>
                 <Switch
                   checked={themeSettings.animations}
-                  onCheckedChange={(checked: boolean) => 
-                    setThemeSettings({...themeSettings, animations: checked})
+                  onCheckedChange={(checked: boolean) =>
+                    setThemeSettings({ ...themeSettings, animations: checked })
                   }
                 />
               </div>

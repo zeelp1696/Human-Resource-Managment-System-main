@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Users, UserCheck, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { User } from '../types/auth';
 import { apiService } from '../utils/api';
+import { toast } from 'sonner';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -31,11 +32,19 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
 
     try {
       const { user } = await apiService.login(email, password);
+
+      // Show toast if user needs to change password
+      if (user.needsPasswordChange) {
+        toast.info('Welcome! Please change your password in Settings → Security', {
+          duration: 6000,
+        });
+      }
+
       onLogin(user);
     } catch (error) {
       console.error('Login failed:', error);
       let errorMessage = 'Login failed. Please try again.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('User not found')) {
           errorMessage = 'User not found. Please check your email address.';
@@ -45,7 +54,7 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
           errorMessage = error.message;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -56,7 +65,7 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
     setIsInitializing(true);
     setError('');
     setDebugInfo('');
-    
+
     try {
       const result = await apiService.forceInitialize();
       setDebugInfo(`Reinitialized with ${result.users?.length || 0} users`);
@@ -182,20 +191,20 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
 
               {error && (
                 <div className="space-y-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="w-full" 
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
                     onClick={handleTestServer}
                     disabled={isInitializing || isLoading}
                   >
                     Test Server Connection
                   </Button>
-                  
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="w-full" 
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
                     onClick={handleForceInit}
                     disabled={isInitializing || isLoading}
                   >
@@ -217,15 +226,6 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
                 </div>
               )}
             </form>
-
-            {onShowSignUp && (
-              <div className="text-xs text-muted-foreground text-center space-y-2 pt-2 border-t">
-                <p>Don't have an account?</p>
-                <Button type="button" variant="outline" className="w-full" onClick={onShowSignUp}>
-                  Create New Account
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

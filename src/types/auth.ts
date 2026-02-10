@@ -7,6 +7,7 @@ export interface User {
   name?: string;
   username?: string;
   avatar?: string;
+  needsPasswordChange?: boolean;
 }
 
 export interface AuthState {

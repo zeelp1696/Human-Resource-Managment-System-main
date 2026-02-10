@@ -203,6 +203,7 @@ export const apiService = {
       role: empData.role,
       position: empData.position,
       department: empData.department,
+      needsPasswordChange: empData.needs_password_change || false,
     };
 
     saveSession(user);
@@ -299,6 +300,15 @@ export const apiService = {
   },
 
   async addEmployee(employee: Partial<Employee>): Promise<Employee> {
+    // Import utilities for email onboarding
+    const { generateTempPassword } = await import('./passwordGenerator');
+    const { hashPassword } = await import('./passwordUtils');
+    const { sendWelcomeEmail } = await import('./emailService');
+
+    // Generate temporary password for new employee
+    const tempPassword = generateTempPassword();
+    const hashedPassword = await hashPassword(tempPassword);
+
     const normalize = (v: any) => (v === undefined || v === "" ? null : v);
     const payload: any = {
       name: (employee.name ?? "").trim(),
@@ -316,6 +326,8 @@ export const apiService = {
           ? employee.joinDate
           : new Date().toISOString().slice(0, 10),
       role: 'employee',
+      password: hashedPassword,
+      needs_password_change: true,
     };
 
     const { data, error } = await supabase
@@ -325,6 +337,21 @@ export const apiService = {
       .single();
 
     if (error) throw error;
+
+    // Try to send welcome email (will fail in browser due to CORS, that's OK for demo)
+    const emailSent = await sendWelcomeEmail(
+      payload.email,
+      payload.name,
+      tempPassword
+    ).catch(err => {
+      console.warn('Email sending failed (expected in browser due to CORS):', err.message);
+      return false;
+    });
+
+    // If email failed, we'll show the password in the UI (good for demo!)
+    if (!emailSent) {
+      console.log('📧 Demo Mode: Temp password for', payload.email, ':', tempPassword);
+    }
 
     // Add skills if provided
     if (employee.skills && employee.skills.length > 0) {
@@ -367,6 +394,16 @@ export const apiService = {
         if (empSkillError) throw empSkillError;
       }
     }
+
+    // Log temp password to console for demo (email won't work from browser)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ EMPLOYEE ADDED SUCCESSFULLY');
+    console.log('📧 Email:', payload.email);
+    console.log('🔑 Temporary Password:', tempPassword);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('NOTE: Email sending blocked by browser CORS policy');
+    console.log('For demo: Copy password from console ☝️');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     return {
       id: data.id,
@@ -725,6 +762,42 @@ export const apiService = {
       .single();
     if (error) throw error;
     return data as ApiUser;
+  },
+
+  async updatePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const { verifyPassword } = await import('./passwordUtils');
+    const { hashPassword } = await import('./passwordUtils');
+
+    // Get current user data
+    const { data: empData, error: fetchError } = await supabase
+      .from('employees')
+      .select('password')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) throw new Error('Failed to fetch user data');
+
+    // Verify current password
+    if (empData.password) {
+      const isValid = await verifyPassword(currentPassword, empData.password);
+      if (!isValid) {
+        throw new Error('Current password is incorrect');
+      }
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update password and clear needs_password_change flag
+    const { error: updateError } = await supabase
+      .from('employees')
+      .update({ 
+        password: hashedPassword,
+        needs_password_change: false,
+      })
+      .eq('id', userId);
+
+    if (updateError) throw new Error('Failed to update password');
   },
 };
 
