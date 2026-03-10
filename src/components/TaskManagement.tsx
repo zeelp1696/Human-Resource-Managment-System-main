@@ -12,13 +12,17 @@ import { apiService } from '../utils/api';
 import type { Task, Employee } from '../utils/api';
 import { findBestEmployeesForTask } from '../utils/skillMatching';
 import { AddEmployee } from './AddEmployee';
+import type { UserRole } from '../types/auth';
+import { canManageTasks } from '../utils/permissions';
 
 interface TaskManagementProps {
   refreshKey?: number;
   onTaskCreated?: () => void;
+  userRole?: UserRole;
 }
 
-export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
+export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps) {
+  const canEdit = canManageTasks(userRole);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,10 +156,12 @@ export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button onClick={() => setShowNewTaskDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Task
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setShowNewTaskDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Task
+            </Button>
+          )}
         </div>
       </div>
 
@@ -305,6 +311,7 @@ export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
                           task={selectedTask}
                           onAssign={assignTaskToEmployee}
                           employees={employees}
+                          canAssign={canEdit}
                         />
                       )}
                     </DialogContent>
@@ -331,7 +338,7 @@ export function TaskManagement({ refreshKey = 0 }: TaskManagementProps) {
   );
 }
 
-function TaskDetailsDialog({ task, onAssign, employees }: { task: Task; onAssign: (taskId: string, employeeId: string) => void; employees: Employee[] }) {
+function TaskDetailsDialog({ task, onAssign, employees, canAssign = true }: { task: Task; onAssign: (taskId: string, employeeId: string) => void; employees: Employee[]; canAssign?: boolean }) {
   const bestMatches = findBestEmployeesForTask(employees, task);
 
   const getMatchScoreColor = (score: number) => {
@@ -390,13 +397,15 @@ function TaskDetailsDialog({ task, onAssign, employees }: { task: Task; onAssign
                       </div>
                     </div>
 
-                    <Button
-                      size="sm"
-                      onClick={() => onAssign(task.id, match.employee.id)}
-                      disabled={task.assigned_to === match.employee.id}
-                    >
-                      {task.assigned_to === match.employee.id ? 'Assigned' : 'Assign Task'}
-                    </Button>
+                    {canAssign && (
+                      <Button
+                        size="sm"
+                        onClick={() => onAssign(task.id, match.employee.id)}
+                        disabled={task.assigned_to === match.employee.id}
+                      >
+                        {task.assigned_to === match.employee.id ? 'Assigned' : 'Assign Task'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

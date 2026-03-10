@@ -12,19 +12,23 @@ import { Search, Mail, Phone, MapPin, Calendar, Briefcase, Trash2 } from 'lucide
 import { apiService } from '../utils/api';
 import type { Employee } from '../utils/api';
 import { AddEmployee } from './AddEmployee';
+import type { UserRole } from '../types/auth';
+import { canManageEmployees, getRoleLabel, getRoleBadgeVariant } from '../utils/permissions';
 
 interface EmployeeManagementProps {
   refreshKey?: number;
   onEmployeeAdded?: () => void;
+  userRole?: UserRole;
 }
 
-export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded }: EmployeeManagementProps) {
+export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded, userRole }: EmployeeManagementProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentUserRole, setCurrentUserRole] = useState<string>('employee');
+
+  const canEdit = canManageEmployees(userRole);
 
   const fetchEmployees = async () => {
     setIsLoading(true);
@@ -41,14 +45,6 @@ export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded }: Employee
   useEffect(() => {
     fetchEmployees();
   }, [refreshKey]);
-
-  useEffect(() => {
-    // naive role read: from local user in App via window or fallback; for simplicity, read from localStorage if present
-    try {
-      const stored = localStorage.getItem('hrms_user_role');
-      if (stored) setCurrentUserRole(stored);
-    } catch {}
-  }, []);
 
   const handleRemoveEmployee = async (employeeId: string) => {
     if (!confirm('Are you sure you want to remove this employee?')) return;
@@ -94,7 +90,9 @@ export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded }: Employee
           <h1>Employee Management</h1>
           <p className="text-muted-foreground">Manage employee profiles, skills, and assignments</p>
         </div>
-        <AddEmployee onEmployeeAdded={() => { fetchEmployees(); onEmployeeAdded?.(); }} />
+        {canEdit && (
+          <AddEmployee onEmployeeAdded={() => { fetchEmployees(); onEmployeeAdded?.(); }} />
+        )}
       </div>
 
       {/* Filters */}
@@ -158,7 +156,14 @@ export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded }: Employee
                   </Avatar>
                   <div className="flex-1">
                     <CardTitle className="text-lg">{employee.name ?? "Unnamed"}</CardTitle>
-                    <CardDescription>{employee.position ?? "No position"}</CardDescription>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${getRoleBadgeVariant((employee.role as UserRole) ?? 'employee')}`}>
+                        {getRoleLabel((employee.role as UserRole) ?? 'employee')}
+                      </span>
+                      {employee.position && (
+                        <span className="text-xs text-muted-foreground">{employee.position}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -198,8 +203,8 @@ export function EmployeeManagement({ refreshKey = 0, onEmployeeAdded }: Employee
                 </div>
 
                 {/* Details dialog */}
-                <div className="grid grid-cols-2 gap-2">
-                  {currentUserRole === 'hr' && (
+                <div className={`grid ${canEdit ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                  {canEdit && (
                     <Button
                       variant="destructive"
                       className="w-full"

@@ -3,9 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Alert, AlertDescription } from './ui/alert';
-import { Users, UserCheck, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Users, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { User } from '../types/auth';
 import { apiService } from '../utils/api';
 import { toast } from 'sonner';
@@ -16,7 +15,6 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onShowSignUp }: LoginProps) {
-  const [loginType, setLoginType] = useState<'hr' | 'employee'>('hr');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -116,29 +114,6 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
             )}
 
             <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="loginType">Login Type</Label>
-                <Select value={loginType} onValueChange={(value: 'hr' | 'employee') => setLoginType(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hr">
-                      <div className="flex items-center space-x-2">
-                        <UserCheck className="h-4 w-4" />
-                        <span>HR Personnel</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="employee">
-                      <div className="flex items-center space-x-2">
-                        <Users className="h-4 w-4" />
-                        <span>Employee</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div>
                 <Label htmlFor="email">Email Address</Label>
                 <Input

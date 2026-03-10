@@ -1,6 +1,10 @@
 // src/lib/api.ts
 import { supabase } from "../supabase";
 import { User } from "../types/auth";
+import { hashPassword, verifyPassword } from './passwordUtils';
+import { generateTempPassword } from './passwordGenerator';
+import { sendWelcomeEmail } from './emailService';
+import { saveSession } from './sessionUtils';
 
 // ---------------- TYPES ----------------
 export interface ApiUser {
@@ -25,6 +29,7 @@ export interface Employee {
   currentTasks?: number;
   joinDate?: string;
   createdAt?: string;
+  role?: string;
   skills: {
     name: string;
     level: number;
@@ -89,7 +94,6 @@ export const apiService = {
   },
   // ---------------- AUTH ----------------
   async signup(email: string, password: string, metadata?: Record<string, any>) {
-    const { hashPassword } = await import('./passwordUtils');
     const hashedPassword = await hashPassword(password);
 
     try {
@@ -149,8 +153,6 @@ export const apiService = {
   },
 
   async login(email: string, password: string) {
-    const { verifyPassword } = await import('./passwordUtils');
-    const { saveSession } = await import('./sessionUtils');
 
     // First, try Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -188,9 +190,8 @@ export const apiService = {
       throw new Error('No password set for this account. Please use Supabase Auth or contact admin.');
     }
 
-    // TEMPORARY: For presentation, skip bcrypt verification
-    // TODO: Re-enable after presentation
-    const isPasswordValid = true; // await verifyPassword(password, empData.password);
+    // Verify password against hash in database
+    const isPasswordValid = await verifyPassword(password, empData.password);
     if (!isPasswordValid) {
       throw new Error('Invalid credentials');
     }
@@ -211,10 +212,11 @@ export const apiService = {
   },
 
   async logout() {
-    const { clearSession } = await import('./sessionUtils');
-    
     // Clear both Supabase Auth and custom session
     const { error } = await supabase.auth.signOut();
+    
+    // Import and clear session
+    const { clearSession } = await import('./sessionUtils');
     clearSession();
     
     // Don't throw error if signOut fails (user might be using db-only auth)
@@ -285,6 +287,7 @@ export const apiService = {
         currentTasks: e.currenttasks || 0,
         joinDate: e.joindate || '',
         createdAt: e.created_at || undefined,
+        role: e.role || 'employee',
         skills,
       } as Employee;
     });
@@ -300,11 +303,6 @@ export const apiService = {
   },
 
   async addEmployee(employee: Partial<Employee>): Promise<Employee> {
-    // Import utilities for email onboarding
-    const { generateTempPassword } = await import('./passwordGenerator');
-    const { hashPassword } = await import('./passwordUtils');
-    const { sendWelcomeEmail } = await import('./emailService');
-
     // Generate temporary password for new employee
     const tempPassword = generateTempPassword();
     const hashedPassword = await hashPassword(tempPassword);
@@ -325,7 +323,7 @@ export const apiService = {
         employee.joinDate && employee.joinDate !== ""
           ? employee.joinDate
           : new Date().toISOString().slice(0, 10),
-      role: 'employee',
+      role: (employee as any).role ?? 'employee',
       password: hashedPassword,
       needs_password_change: true,
     };
@@ -765,8 +763,7 @@ export const apiService = {
   },
 
   async updatePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    const { verifyPassword } = await import('./passwordUtils');
-    const { hashPassword } = await import('./passwordUtils');
+    console.log('🔑 Updating password for user:', userId);
 
     // Get current user data
     const { data: empData, error: fetchError } = await supabase
@@ -775,7 +772,10 @@ export const apiService = {
       .eq('id', userId)
       .single();
 
-    if (fetchError) throw new Error('Failed to fetch user data');
+    if (fetchError) {
+      console.error('Failed to fetch user:', fetchError);
+      throw new Error('Failed to fetch user data');
+    }
 
     // Verify current password
     if (empData.password) {
@@ -783,6 +783,8 @@ export const apiService = {
       if (!isValid) {
         throw new Error('Current password is incorrect');
       }
+    } else {
+      console.warn('No password hash in DB — skipping current password verification');
     }
 
     // Hash new password
@@ -797,7 +799,12 @@ export const apiService = {
       })
       .eq('id', userId);
 
-    if (updateError) throw new Error('Failed to update password');
+    if (updateError) {
+      console.error('Update error:', updateError);
+      throw new Error('Failed to update password');
+    }
+
+    console.log('✅ Password updated successfully');
   },
 };
 

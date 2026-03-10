@@ -1,39 +1,63 @@
-// Supabase Edge Function to send welcome emails
-// Deploy this to Supabase to bypass CORS restrictions
+// Supabase Edge Function: send-welcome-email
+// Sends welcome emails to new employees via Gmail SMTP
+// Deploy: supabase functions deploy send-welcome-email --no-verify-jwt
+// Set secrets: supabase secrets set GMAIL_USER=zeelp1696@gmail.com GMAIL_APP_PASSWORD="jncp rehl dmbz sfcv"
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const MAILTRAP_TOKEN = Deno.env.get('MAILTRAP_TOKEN')
-const FROM_EMAIL = 'hr@smarthrms.com'
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
+}
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      }
-    })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { employeeEmail, employeeName, tempPassword } = await req.json()
+    const { to_email, to_name, temp_password } = await req.json()
+
+    if (!to_email || !to_name || !temp_password) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing required fields' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const GMAIL_USER = Deno.env.get('GMAIL_USER') ?? ''
+    const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') ?? ''
+
+    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+      throw new Error('Gmail credentials not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD secrets.')
+    }
+
+    // Use nodemailer via npm: specifier (Deno supports this natively)
+    const nodemailer = (await import("npm:nodemailer@6.9.8")).default
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: GMAIL_USER,
+        pass: GMAIL_APP_PASSWORD,
+      },
+    })
 
     const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-          .credentials { background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; }
-          .password { font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px; }
-          .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-          .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f3f4f6; }
+          .container { max-width: 600px; margin: 20px auto; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 32px; text-align: center; border-radius: 12px 12px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .header p { margin: 8px 0 0; opacity: 0.85; }
+          .content { background: white; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; }
+          .credentials { background: #f9fafb; padding: 20px; border-left: 4px solid #667eea; border-radius: 0 8px 8px 0; margin: 20px 0; }
+          .password { font-size: 22px; font-weight: bold; color: #667eea; letter-spacing: 2px; font-family: monospace; }
+          .footer { text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
         </style>
       </head>
       <body>
@@ -43,20 +67,19 @@ serve(async (req) => {
             <p>Your journey starts here</p>
           </div>
           <div class="content">
-            <p>Hi <strong>${employeeName}</strong>,</p>
-            
+            <p>Hi <strong>${to_name}</strong>,</p>
             <p>Welcome to the team! Your account has been created in our HR Management System.</p>
             
             <div class="credentials">
-              <p><strong>Email:</strong> ${employeeEmail}</p>
-              <p><strong>Temporary Password:</strong></p>
-              <div class="password">${tempPassword}</div>
+              <p style="margin: 4px 0;"><strong>Email:</strong> ${to_email}</p>
+              <p style="margin: 4px 0;"><strong>Temporary Password:</strong></p>
+              <div class="password">${temp_password}</div>
             </div>
             
             <p>🔒 <strong>Important Security Steps:</strong></p>
             <ol>
               <li>Login using your email and the temporary password above</li>
-              <li>Navigate to <strong>Settings → Security</strong></li>
+              <li>Navigate to <strong>Account Settings</strong></li>
               <li>Change your password immediately</li>
             </ol>
             
@@ -72,48 +95,25 @@ serve(async (req) => {
       </html>
     `
 
-    // Send email via Mailtrap API
-    const response = await fetch('https://send.api.mailtrap.io/api/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MAILTRAP_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: { email: FROM_EMAIL, name: 'SmartHRMS' },
-        to: [{ email: employeeEmail }],
-        subject: '🎉 Welcome to SmartHRMS!',
-        html: htmlContent,
-        text: `Welcome ${employeeName}! Your temp password is: ${tempPassword}`,
-        category: 'Employee Onboarding',
-      }),
+    await transporter.sendMail({
+      from: `"SmartHRMS" <${GMAIL_USER}>`,
+      to: to_email,
+      subject: '🎉 Welcome to SmartHRMS — Your Login Credentials',
+      html: htmlContent,
+      text: `Welcome ${to_name}! Your temporary password is: ${temp_password}. Please change it after first login.`,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Mailtrap API error: ${errorText}`)
-    }
+    console.log(`✅ Welcome email sent to ${to_email}`)
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Email sent successfully' }),
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
+      JSON.stringify({ success: true, message: `Email sent to ${to_email}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Error sending email:', error)
+    console.error('❌ Email error:', error)
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

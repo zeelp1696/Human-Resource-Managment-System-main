@@ -47,6 +47,8 @@ import {
   X,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
+import type { UserRole } from "../types/auth";
+import { canApproveLeaves } from "../utils/permissions";
 
 // DB type (matches Supabase schema)
 type LeaveRequest = {
@@ -67,7 +69,9 @@ type LeaveRequest = {
   days: number; // computed
 };
 
-export function LeaveManagement() {
+export function LeaveManagement({ userRole, userName }: { userRole?: UserRole; userName?: string }) {
+  const canApprove = canApproveLeaves(userRole);
+  const isAdmin = userRole === 'admin';
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
@@ -103,7 +107,7 @@ export function LeaveManagement() {
       .from("leave_requests")
       .update({
         status: "approved",
-        reviewed_by: "HR Manager",
+        reviewed_by: userName ?? "Admin",
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", requestId);
@@ -116,7 +120,7 @@ export function LeaveManagement() {
       .from("leave_requests")
       .update({
         status: "rejected",
-        reviewed_by: "HR Manager",
+        reviewed_by: userName ?? "Admin",
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", requestId);
@@ -146,10 +150,12 @@ export function LeaveManagement() {
             Manage employee leave requests and approvals
           </p>
         </div>
-        <Button onClick={() => setShowNewRequestDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Request
-        </Button>
+        {!isAdmin && (
+          <Button onClick={() => setShowNewRequestDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Request
+          </Button>
+        )}
       </div>
 
       {/* Leave Requests Table */}
@@ -207,7 +213,7 @@ export function LeaveManagement() {
                     <Badge className="capitalize">{request.status}</Badge>
                   </TableCell>
                   <TableCell>
-                    {request.status === "pending" ? (
+                    {request.status === "pending" && canApprove ? (
                       <div className="flex space-x-2">
                         <Button
                           size="sm"
@@ -224,6 +230,8 @@ export function LeaveManagement() {
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
+                    ) : request.status === "pending" ? (
+                      <Badge variant="outline" className="text-xs">Awaiting Review</Badge>
                     ) : (
                       <div className="text-xs text-muted-foreground">
                         {request.reviewed_by && (

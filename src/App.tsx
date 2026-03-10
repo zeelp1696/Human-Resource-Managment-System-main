@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,7 @@ import {
   User as UserIcon,
   LogOut,
   Bell,
+  Shield,
 } from 'lucide-react';
 
 import { Dashboard } from './components/Dashboard';
@@ -35,11 +36,21 @@ import { SignUp } from './components/SignUp';
 import { EmployeeView } from './components/EmployeeView';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { User, AuthState } from './types/auth';
+import { User, AuthState, UserRole } from './types/auth';
 import { apiService } from './utils/api';
 import { Alert, AlertDescription } from './components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import {
+  hasSidebarAccess,
+  canManageEmployees,
+  canManageTasks,
+  canApproveLeaves,
+  canViewReports,
+  canManageSettings,
+  getRoleLabel,
+  getRoleBadgeVariant,
+} from './utils/permissions';
 
 type Page =
   | 'dashboard'
@@ -124,7 +135,7 @@ export default function App() {
     );
   }
 
-  // ✅ Employee view
+  // ✅ Employee view — limited dashboard, no sidebar
   if (authState.user?.role === 'employee') {
     return (
       <ThemeProvider>
@@ -133,17 +144,21 @@ export default function App() {
     );
   }
 
-  // ✅ Admin/HR view
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'employees', label: 'Employees', icon: Users },
-    { id: 'tasks', label: 'Tasks', icon: Briefcase },
-    { id: 'attendance', label: 'Attendance', icon: Clock },
-    { id: 'leave', label: 'Leave', icon: Calendar },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-    { id: 'account', label: 'Account', icon: UserIcon },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  // ✅ Role-based sidebar — filter items by permission
+  const userRole = authState.user?.role as UserRole;
+
+  const allMenuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
+    { id: 'employees', label: 'Employees', icon: Users, show: true },
+    { id: 'tasks', label: 'Tasks', icon: Briefcase, show: true },
+    { id: 'attendance', label: 'Attendance', icon: Clock, show: true },
+    { id: 'leave', label: 'Leave', icon: Calendar, show: canApproveLeaves(userRole) },
+    { id: 'reports', label: 'Reports', icon: BarChart3, show: canViewReports(userRole) },
+    { id: 'account', label: 'Account', icon: UserIcon, show: true },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon, show: canManageSettings(userRole) },
   ];
+
+  const menuItems = allMenuItems.filter(item => item.show);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -159,6 +174,7 @@ export default function App() {
           <EmployeeManagement
             refreshKey={refreshEmployees}
             onEmployeeAdded={() => setRefreshEmployees((k) => k + 1)}
+            userRole={userRole}
           />
         );
       case 'tasks':
@@ -166,12 +182,13 @@ export default function App() {
           <TaskManagement
             refreshKey={refreshTasks}
             onTaskCreated={() => setRefreshTasks((k) => k + 1)}
+            userRole={userRole}
           />
         );
       case 'attendance':
         return <AttendanceManagement />;
       case 'leave':
-        return <LeaveManagement />;
+        return <LeaveManagement userRole={userRole} userName={authState.user?.name} />;
       case 'reports':
         return <Reports />;
       case 'account':
@@ -223,20 +240,25 @@ export default function App() {
                   })}
                 </nav>
 
-                {/* User info */}
+                {/* User info + role badge */}
                 <div className="mt-auto pt-4 border-t">
                   <div className="flex items-center space-x-3 p-2">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback>
                         {authState.user?.name
-                          .split(' ')
+                          ?.split(' ')
                           .map((n) => n[0])
                           .join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{authState.user?.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{authState.user?.name}</p>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${getRoleBadgeVariant(userRole)}`}>
+                          {getRoleLabel(userRole)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
                         {authState.user?.position}
                       </p>
                     </div>
@@ -262,6 +284,10 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center space-x-4">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getRoleBadgeVariant(userRole)}`}>
+                      <Shield className="h-3 w-3" />
+                      {getRoleLabel(userRole)}
+                    </span>
                     <Badge variant="outline">
                       {authState.user?.department}
                     </Badge>
@@ -312,7 +338,7 @@ function ReportsPlaceholder() {
 function SettingsPlaceholder() {
   return (
     <div className="p-6 text-center">
-      <Settings className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+      <SettingsIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
       <h3 className="font-medium mb-2">System Settings</h3>
       <p className="text-muted-foreground">
         System configuration and settings will be available here.

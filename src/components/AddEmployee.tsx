@@ -33,6 +33,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
     phone: '',
     experience: 0,
     salary: 0,
+    role: 'employee' as 'employee' | 'hr' | 'manager',
   });
 
   const [skills, setSkills] = useState<SkillInput[]>([]);
@@ -107,6 +108,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
         phone: '',
         experience: 0,
         salary: 0,
+        role: 'employee',
       });
       setSkills([]);
       setIsOpen(false);
@@ -182,6 +184,25 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
                   required
                 />
               </div>
+              <div>
+                <Label>Role *</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(val: string) => handleInputChange('role', val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Employee</SelectItem>
+                    <SelectItem value="hr">HR</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Department *</Label>
                 <Select
