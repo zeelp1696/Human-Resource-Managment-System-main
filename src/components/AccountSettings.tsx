@@ -31,12 +31,14 @@ import {
 import { User as AuthUser } from '../types/auth';
 import { toast } from 'sonner';
 import { apiService } from '../utils/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AccountSettingsProps {
   user: AuthUser;
 }
 
 export function AccountSettings({ user }: AccountSettingsProps) {
+  const { theme: contextTheme, setTheme: setContextTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -83,12 +85,12 @@ export function AccountSettings({ user }: AccountSettingsProps) {
     suspiciousActivityAlerts: true,
   });
 
-  // Theme preferences
+  // Theme preferences — initialized from real ThemeContext
   const [themeSettings, setThemeSettings] = useState({
-    theme: 'light',
-    compactMode: false,
-    sidebar: 'expanded',
-    animations: true,
+    theme: contextTheme,
+    compactMode: localStorage.getItem('compactMode') === 'true',
+    sidebar: localStorage.getItem('sidebarMode') || 'expanded',
+    animations: localStorage.getItem('animations') !== 'false',
   });
 
   const handleSaveProfile = async () => {
@@ -142,8 +144,14 @@ export function AccountSettings({ user }: AccountSettingsProps) {
   };
 
   const handleSaveTheme = async () => {
+    // Apply theme to the real context (persists to localStorage)
+    setContextTheme(themeSettings.theme as 'light' | 'dark' | 'system');
+    // Persist other display prefs to localStorage
+    localStorage.setItem('compactMode', String(themeSettings.compactMode));
+    localStorage.setItem('sidebarMode', themeSettings.sidebar);
+    localStorage.setItem('animations', String(themeSettings.animations));
     setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
     setIsSaving(false);
     toast.success('Appearance settings saved!');
   };
@@ -658,7 +666,10 @@ export function AccountSettings({ user }: AccountSettingsProps) {
                 <Label htmlFor="theme">Theme</Label>
                 <Select
                   value={themeSettings.theme}
-                  onValueChange={(value: string) => setThemeSettings({ ...themeSettings, theme: value })}
+                  onValueChange={(value: string) => {
+                    setThemeSettings({ ...themeSettings, theme: value });
+                    setContextTheme(value as 'light' | 'dark' | 'system'); // live preview
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />

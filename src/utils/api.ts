@@ -59,6 +59,7 @@ export interface Task {
 export interface Leave {
   id: string;
   employeeId: string;
+  type?: string | null;
   startDate: string;
   endDate: string;
   reason?: string | null;
@@ -206,6 +207,31 @@ export const apiService = {
       department: empData.department,
       needsPasswordChange: empData.needs_password_change || false,
     };
+
+    // Establish a Supabase Auth session so RLS-protected writes (tasks, employees) work
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        // No Supabase Auth account yet — create one then sign in
+        await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              role: empData.role,
+              name: empData.name,
+              department: empData.department,
+              position: empData.position,
+            },
+          },
+        });
+        // Sign in immediately (works when email confirmation is disabled)
+        await supabase.auth.signInWithPassword({ email, password });
+      }
+    } catch {
+      // DB auth succeeded — continue even if Supabase Auth setup fails
+      console.warn('Could not establish Supabase Auth session; some writes may fail RLS.');
+    }
 
     saveSession(user);
     return { user };
@@ -598,6 +624,7 @@ export const apiService = {
   async requestLeave(leave: Partial<Leave>): Promise<Leave> {
     const payload: any = {
       employee_id: leave.employeeId,
+      type: leave.type ?? null,
       start_date: leave.startDate,
       end_date: leave.endDate,
       reason: leave.reason ?? null,
@@ -804,6 +831,16 @@ export const apiService = {
       throw new Error('Failed to update password');
     }
 
+    // Also update Supabase Auth password so login stays in sync
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.updateUser({ password: newPassword });
+      }
+    } catch (e) {
+      console.warn('Could not update Supabase Auth password (non-fatal):', e);
+    }
+
     console.log('✅ Password updated successfully');
   },
 };
@@ -813,6 +850,7 @@ function mapLeaveRow(row: any): Leave {
   return {
     id: row.id,
     employeeId: row.employee_id ?? row.employeeId,
+    type: row.type ?? null,
     startDate: row.start_date ?? row.startDate,
     endDate: row.end_date ?? row.endDate,
     reason: row.reason ?? null,

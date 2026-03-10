@@ -152,7 +152,7 @@ export default function App() {
     { id: 'employees', label: 'Employees', icon: Users, show: true },
     { id: 'tasks', label: 'Tasks', icon: Briefcase, show: true },
     { id: 'attendance', label: 'Attendance', icon: Clock, show: true },
-    { id: 'leave', label: 'Leave', icon: Calendar, show: canApproveLeaves(userRole) },
+    { id: 'leave', label: 'Leave', icon: Calendar, show: canApproveLeaves(userRole) || userRole === 'manager' },
     { id: 'reports', label: 'Reports', icon: BarChart3, show: canViewReports(userRole) },
     { id: 'account', label: 'Account', icon: UserIcon, show: true },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, show: canManageSettings(userRole) },
@@ -188,7 +188,7 @@ export default function App() {
       case 'attendance':
         return <AttendanceManagement />;
       case 'leave':
-        return <LeaveManagement userRole={userRole} userName={authState.user?.name} />;
+        return <LeaveManagement userRole={userRole} userName={authState.user?.name} userId={authState.user?.id} />;
       case 'reports':
         return <Reports />;
       case 'account':

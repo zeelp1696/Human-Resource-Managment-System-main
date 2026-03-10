@@ -3,17 +3,18 @@ import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider, SidebarTrigger
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Clock, 
-  Calendar, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  Clock,
+  Calendar,
   User,
   FileText,
   Award,
   Settings,
   LogOut,
-  Bell
+  Bell,
+  Plus,
 } from 'lucide-react';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { AccountSettings } from './AccountSettings';
@@ -23,6 +24,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Textarea } from './ui/textarea';
 import { apiService } from '../utils/api';
 import type { Task, Attendance, Leave, Employee } from '../utils/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -431,14 +434,19 @@ function MyAttendance({ user, employeeId }: { user: AuthUser; employeeId: string
 function MyLeaves({ user, employeeId }: { user: AuthUser; employeeId: string | null }) {
   const [rows, setRows] = useState<Leave[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState({ type: '', start: '', end: '', reason: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const load = async () => {
     const all = await apiService.getLeaves();
     const id = employeeId ?? user.id;
     setRows((all ?? []).filter(l => (l.employeeId ?? '') === id));
     setIsLoading(false);
   };
+
   useEffect(() => { load(); }, [user.id, employeeId]);
+
   useEffect(() => {
     if (!employeeId) return;
     const channel = supabase
@@ -447,88 +455,139 @@ function MyLeaves({ user, employeeId }: { user: AuthUser; employeeId: string | n
         load();
       })
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [employeeId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.type || !form.start || !form.end) return;
+    setIsSubmitting(true);
     await apiService.requestLeave({
-      employeeId: (employeeId ?? user.id),
-      type: form.type as any,
+      employeeId: employeeId ?? user.id,
+      type: form.type,
       startDate: form.start,
       endDate: form.end,
       reason: form.reason,
     } as any);
     setForm({ type: '', start: '', end: '', reason: '' });
+    setShowDialog(false);
+    setIsSubmitting(false);
     load();
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'approved': return <Badge className="bg-green-100 text-green-800 capitalize">{status}</Badge>;
+      case 'rejected': return <Badge className="bg-red-100 text-red-800 capitalize">{status}</Badge>;
+      default: return <Badge className="bg-yellow-100 text-yellow-800 capitalize">{status ?? 'pending'}</Badge>;
+    }
   };
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-2">My Leave Requests</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Dates</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={4}>Loading...</TableCell></TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={4}>No leave requests</TableCell></TableRow>
-            ) : (
-              rows.map(l => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.startDate} — {l.endDate}</TableCell>
-                  <TableCell className="capitalize">{(l as any).type ?? '-'}</TableCell>
-                  <TableCell>{l.reason ?? '-'}</TableCell>
-                  <TableCell className="capitalize">{l.status ?? '-'}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      {/* Header with button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">My Leave Requests</h3>
+          <p className="text-sm text-muted-foreground">Track and manage your leave history</p>
+        </div>
+        <Button onClick={() => setShowDialog(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Request Leave
+        </Button>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2">Request Leave</h4>
-        <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
-          <div>
-            <Label>Type</Label>
-            <Select value={form.type} onValueChange={(v: string) => setForm(s => ({ ...s, type: v }))}>
-              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sick">Sick</SelectItem>
-                <SelectItem value="vacation">Vacation</SelectItem>
-                <SelectItem value="personal">Personal</SelectItem>
-                <SelectItem value="emergency">Emergency</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Start</Label>
-            <Input type="date" value={form.start} onChange={(e) => setForm(s => ({ ...s, start: e.target.value }))} />
-          </div>
-          <div>
-            <Label>End</Label>
-            <Input type="date" value={form.end} onChange={(e) => setForm(s => ({ ...s, end: e.target.value }))} />
-          </div>
-          <div className="md:col-span-4">
-            <Label>Reason</Label>
-            <Input value={form.reason} onChange={(e) => setForm(s => ({ ...s, reason: e.target.value }))} />
-          </div>
-          <div className="md:col-span-4 text-right">
-            <Button type="submit">Submit</Button>
-          </div>
-        </form>
-      </div>
+      {/* Leave history table */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Dates</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Reason</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow><TableCell colSpan={4} className="text-center py-6">Loading...</TableCell></TableRow>
+          ) : rows.length === 0 ? (
+            <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No leave requests yet</TableCell></TableRow>
+          ) : (
+            rows.map(l => (
+              <TableRow key={l.id}>
+                <TableCell>{l.startDate} — {l.endDate}</TableCell>
+                <TableCell className="capitalize">{l.type ?? '-'}</TableCell>
+                <TableCell>{l.reason ?? '-'}</TableCell>
+                <TableCell>{getStatusBadge(l.status)}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+
+      {/* Request Leave Dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Leave</DialogTitle>
+            <DialogDescription>
+              Fill in the details below. Your request will be reviewed by HR or Admin.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-4 pt-2">
+            <div>
+              <Label>Leave Type</Label>
+              <Select value={form.type} onValueChange={(v) => setForm(s => ({ ...s, type: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sick">Sick Leave</SelectItem>
+                  <SelectItem value="vacation">Vacation</SelectItem>
+                  <SelectItem value="personal">Personal Leave</SelectItem>
+                  <SelectItem value="emergency">Emergency Leave</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Start Date</Label>
+                <Input
+                  type="date"
+                  value={form.start}
+                  onChange={(e) => setForm(s => ({ ...s, start: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label>End Date</Label>
+                <Input
+                  type="date"
+                  value={form.end}
+                  min={form.start}
+                  onChange={(e) => setForm(s => ({ ...s, end: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <Textarea
+                value={form.reason}
+                onChange={(e) => setForm(s => ({ ...s, reason: e.target.value }))}
+                placeholder="Briefly describe the reason..."
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !form.type || !form.start || !form.end}>
+                {isSubmitting ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
