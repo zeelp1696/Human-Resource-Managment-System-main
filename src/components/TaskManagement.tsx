@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Label } from './ui/label';
 import { Search, Plus, Calendar, Clock, User, Target, AlertTriangle, CheckCircle, Star } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiService } from '../utils/api';
 import type { Task, Employee } from '../utils/api';
 import { findBestEmployeesForTask } from '../utils/skillMatching';
@@ -108,8 +109,10 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
           task.id === taskId ? updatedTask : task
         )
       );
+      toast.success(`Task assigned to ${getEmployeeName(employeeId)}!`);
     } catch (error) {
       console.error('Failed to assign task:', error);
+      toast.error('Failed to assign task. Check console for details.');
     }
   };
 
@@ -141,8 +144,10 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
       setdue_date('');
       setEstimatedHours(0);
       setPriority('medium');
+      toast.success('Task created successfully!');
     } catch (err) {
       console.error('Failed to create task:', err);
+      toast.error('Failed to create task. Please try again.');
     }
   };
 
@@ -187,7 +192,7 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
             </div>
 
             <div>
-              <Label>due_date</Label>
+              <Label>Due Date</Label>
               <Input type="date" value={due_date} onChange={(e) => setdue_date(e.target.value)} required />
             </div>
 

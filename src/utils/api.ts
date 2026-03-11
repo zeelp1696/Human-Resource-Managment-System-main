@@ -71,8 +71,47 @@ export interface Attendance {
   id: string;
   employeeId: string;
   date: string;
-  status: string;
+  status: 'present' | 'absent' | 'leave' | 'late' | 'half-day' | 'on-break';
+  checkIn?: string | null;
+  checkOut?: string | null;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  breakDuration?: number; // minutes
+  totalHours?: number;
+  isLate?: boolean;
+  isOvertime?: boolean;
+  overtimeHours?: number;
+  breakDeduction?: number;
+  notes?: string | null;
   createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AttendanceLog {
+  id: string;
+  attendanceId: string;
+  employeeId: string;
+  eventType: 'check-in' | 'check-out' | 'break-start' | 'break-end';
+  eventTime: string;
+  location?: string | null;
+  ipAddress?: string | null;
+  deviceInfo?: string | null;
+  createdAt?: string | null;
+}
+
+export interface PunchInResponse {
+  success: boolean;
+  attendance: Attendance;
+  message: string;
+}
+
+export interface PunchOutResponse {
+  success: boolean;
+  attendance: Attendance;
+  message: string;
+  totalHours: number;
+  isOvertime: boolean;
+  overtimeHours: number;
 }
 
 export interface Report {
@@ -672,6 +711,322 @@ export const apiService = {
     return (data ?? []).map(mapAttendanceRow);
   },
 
+  // Get today's attendance for an employee
+  async getTodayAttendance(employeeId: string): Promise<Attendance | null> {
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .eq("date", today)
+      .single();
+    
+    if (error || !data) return null;
+    return mapAttendanceRow(data);
+  },
+
+  // Punch In
+  async punchIn(employeeId: string, location?: string): Promise<PunchInResponse> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString();
+    
+    try {
+      // Check if already punched in today
+      const existing = await this.getTodayAttendance(employeeId);
+      
+      if (existing && existing.checkIn) {
+        return {
+          success: false,
+          attendance: existing,
+          message: 'You have already punched in today'
+        };
+      }
+
+      // Flexible shift: No fixed start time, no late marking
+      // Employee can punch in anytime
+      let attendance: Attendance;
+
+      if (existing) {
+        // Update existing record
+        const { data, error } = await supabase
+          .from("attendance")
+          .update({
+            check_in: now,
+            status: 'present',
+            is_late: false,
+            updated_at: now
+          })
+          .eq("id", existing.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        attendance = mapAttendanceRow(data);
+      } else {
+        // Create new record
+        const { data, error } = await supabase
+          .from("attendance")
+          .insert({
+            employee_id: employeeId,
+            date: today,
+            check_in: now,
+            status: 'present',
+            is_late: false,
+            break_duration: 0,
+            total_hours: 0
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        attendance = mapAttendanceRow(data);
+      }
+
+      // Log the event
+      await supabase.from("attendance_logs").insert({
+        attendance_id: attendance.id,
+        employee_id: employeeId,
+        event_type: 'check-in',
+        event_time: now,
+        location: location || null
+      });
+
+      return {
+        success: true,
+        attendance,
+        message: 'Punched in successfully - Timer started'
+      };
+    } catch (error) {
+      console.error('Punch in error:', error);
+      throw error;
+    }
+  },
+
+  // Punch Out
+  async punchOut(employeeId: string, location?: string): Promise<PunchOutResponse> {
+    const now = new Date().toISOString();
+    
+    try {
+      const existing = await this.getTodayAttendance(employeeId);
+      
+      if (!existing || !existing.checkIn) {
+        throw new Error('You must punch in before punching out');
+      }
+
+      if (existing.checkOut) {
+        throw new Error('You have already punched out today');
+      }
+
+      // FLEXIBLE 9-HOUR SHIFT SYSTEM
+      const checkInTime = new Date(existing.checkIn);
+      const checkOutTime = new Date(now);
+      const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+      const totalMinutes = Math.floor(diffMs / 1000 / 60);
+      const breakMinutes = existing.breakDuration || 0;
+      const workMinutes = totalMinutes - breakMinutes;
+      const totalHours = Number((workMinutes / 60).toFixed(2));
+
+      // 9-hour requirement
+      const requiredHours = 9;
+      const isOvertime = totalHours > requiredHours;
+      const isUndertime = totalHours < requiredHours;
+      
+      // Calculate overtime (>9 hours)
+      let overtimeHours = 0;
+      if (isOvertime) {
+        overtimeHours = Number((totalHours - requiredHours).toFixed(2));
+      }
+
+      // Calculate undertime deduction (<9 hours)
+      let undertimeHours = 0;
+      let undertimeDeduction = 0;
+      if (isUndertime) {
+        undertimeHours = Number((requiredHours - totalHours).toFixed(2));
+        // Deduct ₹100 per hour short
+        undertimeDeduction = Number((undertimeHours * 100).toFixed(2));
+      }
+
+      // Calculate break deduction (if break > 60 minutes)
+      const excessBreakMinutes = Math.max(0, breakMinutes - 60);
+      const breakDeduction = Number((excessBreakMinutes * 0.5).toFixed(2)); // ₹0.5 per minute
+
+      // Total deduction
+      const totalDeduction = undertimeDeduction + breakDeduction;
+
+      // Determine final status
+      let status = 'present';
+      if (totalHours < 4) {
+        status = 'half-day';
+      } else if (isOvertime) {
+        status = 'present'; // Full day with overtime
+      } else if (isUndertime) {
+        status = 'present'; // Present but with deduction
+      }
+
+      // Update attendance
+      const { data, error } = await supabase
+        .from("attendance")
+        .update({
+          check_out: now,
+          total_hours: totalHours,
+          is_overtime: isOvertime,
+          overtime_hours: overtimeHours,
+          break_deduction: totalDeduction, // Total deduction (undertime + break excess)
+          status: status,
+          is_late: false, // No late marking in flexible system
+          notes: isUndertime ? `Undertime: ${undertimeHours}h (₹${undertimeDeduction} deducted)` : null,
+          updated_at: now
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      const attendance = mapAttendanceRow(data);
+
+      // Log the event
+      await supabase.from("attendance_logs").insert({
+        attendance_id: attendance.id,
+        employee_id: employeeId,
+        event_type: 'check-out',
+        event_time: now,
+        location: location || null
+      });
+
+      return {
+        success: true,
+        attendance,
+        message: 'Punched out successfully',
+        totalHours,
+        isOvertime,
+        overtimeHours
+      };
+    } catch (error) {
+      console.error('Punch out error:', error);
+      throw error;
+    }
+  },
+
+  // Start Break
+  async startBreak(employeeId: string): Promise<{ success: boolean; attendance: Attendance; message: string }> {
+    const now = new Date().toISOString();
+    
+    try {
+      const existing = await this.getTodayAttendance(employeeId);
+      
+      if (!existing || !existing.checkIn) {
+        throw new Error('You must punch in before taking a break');
+      }
+
+      if (existing.checkOut) {
+        throw new Error('You have already punched out');
+      }
+
+      // Allow multiple breaks - check if currently on break
+      if (existing.status === 'on-break') {
+        throw new Error('Break already in progress');
+      }
+
+      const { data, error } = await supabase
+        .from("attendance")
+        .update({
+          break_start: now,
+          status: 'on-break',
+          updated_at: now
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      const attendance = mapAttendanceRow(data);
+
+      // Log the event
+      await supabase.from("attendance_logs").insert({
+        attendance_id: attendance.id,
+        employee_id: employeeId,
+        event_type: 'break-start',
+        event_time: now
+      });
+
+      return {
+        success: true,
+        attendance,
+        message: 'Break started'
+      };
+    } catch (error) {
+      console.error('Start break error:', error);
+      throw error;
+    }
+  },
+
+  // End Break
+  async endBreak(employeeId: string): Promise<{ success: boolean; attendance: Attendance; message: string; breakDuration: number; excessMinutes: number }> {
+    const now = new Date().toISOString();
+    
+    try {
+      const existing = await this.getTodayAttendance(employeeId);
+      
+      if (!existing || !existing.breakStart) {
+        throw new Error('You must start a break before ending it');
+      }
+
+      if (existing.breakEnd) {
+        throw new Error('Break already ended');
+      }
+
+      // Calculate break duration
+      const breakStartTime = new Date(existing.breakStart);
+      const breakEndTime = new Date(now);
+      const breakMs = breakEndTime.getTime() - breakStartTime.getTime();
+      const currentBreakMinutes = Math.floor(breakMs / 1000 / 60);
+      const totalBreakMinutes = (existing.breakDuration || 0) + currentBreakMinutes;
+      
+      const excessMinutes = Math.max(0, totalBreakMinutes - 60);
+
+      // Restore status to present (flexible shift system)
+      const status = 'present';
+
+      // Clear break_start and break_end to allow multiple breaks
+      const { data, error } = await supabase
+        .from("attendance")
+        .update({
+          break_start: null,
+          break_end: null,
+          break_duration: totalBreakMinutes,
+          status: status,
+          updated_at: now
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      const attendance = mapAttendanceRow(data);
+
+      // Log the event
+      await supabase.from("attendance_logs").insert({
+        attendance_id: attendance.id,
+        employee_id: employeeId,
+        event_type: 'break-end',
+        event_time: now
+      });
+
+      return {
+        success: true,
+        attendance,
+        message: excessMinutes > 0 
+          ? `Break ended (${excessMinutes} min over limit - deduction applies)` 
+          : 'Break ended',
+        breakDuration: totalBreakMinutes,
+        excessMinutes
+      };
+    } catch (error) {
+      console.error('End break error:', error);
+      throw error;
+    }
+  },
+
   // ---------------- DASHBOARD ----------------
   async getDashboardStats() {
     try {
@@ -865,7 +1220,19 @@ function mapAttendanceRow(row: any): Attendance {
     employeeId: row.employee_id ?? row.employeeId,
     date: row.date,
     status: row.status,
+    checkIn: row.check_in ?? null,
+    checkOut: row.check_out ?? null,
+    breakStart: row.break_start ?? null,
+    breakEnd: row.break_end ?? null,
+    breakDuration: row.break_duration ?? 0,
+    totalHours: row.total_hours ?? 0,
+    isLate: row.is_late ?? false,
+    isOvertime: row.is_overtime ?? false,
+    overtimeHours: row.overtime_hours ?? 0,
+    breakDeduction: row.break_deduction ?? 0,
+    notes: row.notes ?? null,
     createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
   };
 }
 

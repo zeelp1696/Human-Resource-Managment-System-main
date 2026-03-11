@@ -29,15 +29,19 @@ import {
 } from "lucide-react";
 import { apiService, Employee, Task } from "../utils/api"; // import directly from api definitions
 import { getSkillGaps } from "../utils/skillMatching";
+import { QuickPunchButton } from "./QuickPunchButton";
+import { User } from "../types/auth";
 
 interface DashboardProps {
   refreshEmployees?: number;
   refreshTasks?: number;
+  currentUser?: User | null;
 }
 
 export function Dashboard({
   refreshEmployees = 0,
   refreshTasks = 0,
+  currentUser = null,
 }: DashboardProps) {
   const [stats, setStats] = useState({
     totalEmployees: 0,
@@ -204,6 +208,13 @@ export function Dashboard({
         </div>
       </div>
 
+      {/* Quick Punch Button for HR/Manager users */}
+      {currentUser && (currentUser.role === 'hr' || currentUser.role === 'manager') && (
+        <div className="mb-6">
+          <QuickPunchButton employeeId={currentUser.id} />
+        </div>
+      )}
+
       {/* Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -295,25 +306,32 @@ export function Dashboard({
         <Card>
           <CardHeader>
             <CardTitle>Skill Gaps</CardTitle>
-            <CardDescription>Areas needing attention</CardDescription>
+            <CardDescription>Skills in high demand with limited availability</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {skillGaps.length > 0 ? (
-                skillGaps.map((gap, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium leading-none">{gap.skill}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {gap.gap} employees needed
-                      </p>
+                skillGaps.map((gap, index) => {
+                  // Determine severity based on gap size
+                  const severity = gap.gap >= 3 ? 'critical' : gap.gap >= 2 ? 'high' : 'medium';
+                  const badgeVariant = severity === 'critical' ? 'destructive' : severity === 'high' ? 'default' : 'secondary';
+                  const badgeText = severity === 'critical' ? 'Critical' : severity === 'high' ? 'High' : 'Medium';
+                  
+                  return (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium leading-none">{gap.skill}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {gap.gap} {gap.gap === 1 ? 'employee' : 'employees'} needed
+                        </p>
+                      </div>
+                      <Badge variant={badgeVariant}>
+                        {severity === 'critical' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                        {badgeText}
+                      </Badge>
                     </div>
-                    <Badge variant="destructive">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      Critical
-                    </Badge>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-sm text-muted-foreground">No skill gaps identified</p>
               )}

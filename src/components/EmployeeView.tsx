@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { AccountSettings } from './AccountSettings';
+import { TaskManagement } from './TaskManagement';
 import { ThemeToggle } from './ThemeToggle';
 import { User as AuthUser } from '../types/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -66,11 +67,17 @@ export function EmployeeView({ user, onLogout }: EmployeeViewProps) {
   ];
 
   const renderPage = () => {
+    const empTaskAccess = localStorage.getItem('employeeTaskAccess') === 'true';
+
     switch (currentPage) {
       case 'dashboard':
         return <EmployeeDashboard user={user} />;
       case 'tasks':
-        return <MyTasks user={user} employeeId={employeeId} />;
+        // If admin has enabled employee task access, show full task board
+        // so employees can create and assign tasks to each other
+        return empTaskAccess
+          ? <TaskManagement userRole="manager" />
+          : <MyTasks user={user} employeeId={employeeId} />;
       case 'profile':
         return <MyProfile user={user} />;
       case 'attendance':

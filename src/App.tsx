@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -72,10 +72,54 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [isMockMode, setIsMockMode] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   // Track refresh triggers
   const [refreshEmployees, setRefreshEmployees] = useState(0);
   const [refreshTasks, setRefreshTasks] = useState(0);
+
+  // Restore session on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        // Try to restore from localStorage first (demo mode)
+        const storedUser = localStorage.getItem('hrms_user');
+        const storedRole = localStorage.getItem('hrms_user_role');
+        
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          setAuthState({ isAuthenticated: true, user });
+          setIsLoadingSession(false);
+          return;
+        }
+
+        // Try Supabase session if available
+        try {
+          const { supabase } = await import('./supabase-config');
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+            // Convert Supabase user to our User type
+            const { apiService } = await import('./utils/api');
+            const profile = await apiService.getCurrentUser();
+            
+            if (profile) {
+              setAuthState({ isAuthenticated: true, user: profile });
+            }
+          }
+        } catch (supabaseError) {
+          // Supabase not configured, continue with demo mode
+          console.log('Supabase not configured, using demo mode');
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   const getInitials = (name?: string) => {
     if (!name || typeof name !== 'string') return '?';
@@ -94,6 +138,7 @@ export default function App() {
     setIsMockMode(false); // Always false for now
     setAuthView('login');
     try {
+      localStorage.setItem('hrms_user', JSON.stringify(user));
       localStorage.setItem('hrms_user_role', user.role ?? 'employee');
     } catch { }
   };
@@ -103,6 +148,7 @@ export default function App() {
     setIsMockMode(false); // Always false for now
     setAuthView('login');
     try {
+      localStorage.setItem('hrms_user', JSON.stringify(user));
       localStorage.setItem('hrms_user_role', user.role ?? 'employee');
     } catch { }
   };
@@ -112,9 +158,24 @@ export default function App() {
     setAuthState({ isAuthenticated: false, user: null });
     setAuthView('login');
     try {
+      localStorage.removeItem('hrms_user');
       localStorage.removeItem('hrms_user_role');
     } catch { }
   };
+
+  // Show loading state while checking session
+  if (isLoadingSession) {
+    return (
+      <ThemeProvider>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
 
   // ✅ Show login/signup if not authenticated
   if (!authState.isAuthenticated) {
@@ -167,6 +228,7 @@ export default function App() {
           <Dashboard
             refreshEmployees={refreshEmployees}
             refreshTasks={refreshTasks}
+            currentUser={authState.user}
           />
         );
       case 'employees':
@@ -186,7 +248,7 @@ export default function App() {
           />
         );
       case 'attendance':
-        return <AttendanceManagement />;
+        return <AttendanceManagement currentUser={authState.user} />;
       case 'leave':
         return <LeaveManagement userRole={userRole} userName={authState.user?.name} userId={authState.user?.id} />;
       case 'reports':
@@ -259,7 +321,7 @@ export default function App() {
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
-                        {authState.user?.position}
+                        {userRole?.toUpperCase()}
                       </p>
                     </div>
                     <Button variant="ghost" size="sm" onClick={handleLogout}>
@@ -295,9 +357,6 @@ export default function App() {
                     <Button variant="ghost" size="sm">
                       <Bell className="h-4 w-4" />
                     </Button>
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>{getInitials(authState.user?.name)}</AvatarFallback>
-                    </Avatar>
                   </div>
                 </div>
               </header>

@@ -16,6 +16,7 @@ import {
 import { apiService } from '../utils/api';
 import type { Employee, Task, Leave } from '../utils/api';
 import { User as AuthUser } from '../types/auth';
+import { QuickPunchButton } from './QuickPunchButton';
 
 interface EmployeeDashboardProps {
   user: AuthUser;
@@ -110,43 +111,53 @@ export function EmployeeDashboard({ user }: EmployeeDashboardProps) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card><CardHeader><CardTitle>My Tasks</CardTitle></CardHeader>
-          <CardContent>{myTasks.length} total</CardContent></Card>
-        <Card><CardHeader><CardTitle>Completed</CardTitle></CardHeader>
-          <CardContent>{completedTasks.length} ({completionRate}%)</CardContent></Card>
-        <Card><CardHeader><CardTitle>Pending</CardTitle></CardHeader>
-          <CardContent>{pendingTasks.length}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Leave Requests</CardTitle></CardHeader>
-          <CardContent>{pendingLeaves.length}</CardContent></Card>
-      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left Column: Punch Widget */}
+        <div className="lg:col-span-1">
+          <QuickPunchButton employeeId={emp.id} />
+        </div>
 
-      {/* Profile */}
-      <Card>
-        <CardHeader><CardTitle>My Profile & Skills</CardTitle></CardHeader>
-        <CardContent>
-          <h3>{emp.name}</h3>
-          <p>{emp.position}</p>
-          <p>{(emp as any).experience ?? 0} yrs exp.</p>
-          <div className="mt-4">
-            {((emp as any).skills ?? []).length > 0 ? (
-              ((emp as any).skills ?? []).slice(0, 5).map((s: any, i: number) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <span>{s.name}</span>
-                  <Badge variant="outline">L{s.level}</Badge>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No skills listed</p>
-            )}
+        {/* Right Column: Stats and Profile */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Stats */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card><CardHeader><CardTitle>My Tasks</CardTitle></CardHeader>
+              <CardContent>{myTasks.length} total</CardContent></Card>
+            <Card><CardHeader><CardTitle>Completed</CardTitle></CardHeader>
+              <CardContent>{completedTasks.length} ({completionRate}%)</CardContent></Card>
+            <Card><CardHeader><CardTitle>Pending</CardTitle></CardHeader>
+              <CardContent>{pendingTasks.length}</CardContent></Card>
+            <Card><CardHeader><CardTitle>Leave Requests</CardTitle></CardHeader>
+              <CardContent>{pendingLeaves.length}</CardContent></Card>
           </div>
-          <div className="mt-4">
-            Availability: {(emp as any).availability ?? 0}%
-            <Progress value={(emp as any).availability ?? 0} className="mt-2 h-2" />
-          </div>
-        </CardContent>
-      </Card>
+
+          {/* Profile */}
+          <Card>
+            <CardHeader><CardTitle>My Profile & Skills</CardTitle></CardHeader>
+            <CardContent>
+              <h3>{emp.name}</h3>
+              <p>{emp.position}</p>
+              <p>{(emp as any).experience ?? 0} yrs exp.</p>
+              <div className="mt-4">
+                {((emp as any).skills ?? []).length > 0 ? (
+                  ((emp as any).skills ?? []).slice(0, 5).map((s: any, i: number) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>{s.name}</span>
+                      <Badge variant="outline">L{s.level}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No skills listed</p>
+                )}
+              </div>
+              <div className="mt-4">
+                Availability: {(emp as any).availability ?? 0}%
+                <Progress value={(emp as any).availability ?? 0} className="mt-2 h-2" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
