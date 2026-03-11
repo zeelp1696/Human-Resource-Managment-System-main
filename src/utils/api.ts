@@ -48,6 +48,7 @@ export interface Task {
   due_date?: string | null; // ✅ renamed for consistency
   assigned_to?: string | null; // ✅ renamed for consistency
   createdAt?: string | null;
+  completed_at?: string | null; // Added for tracking completion time
   requiredSkills: {
     name: string;
     level: number;
@@ -648,6 +649,15 @@ export const apiService = {
       createdAt: data.created_at,
       requiredSkills: [],
     } as Task;
+  },
+
+  async deleteTask(taskId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", taskId);
+    if (error) throw error;
+    return true;
   },
 
   // ---------------- LEAVE REQUESTS ----------------

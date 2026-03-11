@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -7,23 +7,38 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Label } from './ui/label';
-import { Search, Plus, Calendar, Clock, User, Target, AlertTriangle, CheckCircle, Star } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Search, Plus, Calendar, Clock, User, Target, AlertTriangle, CheckCircle, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../utils/api';
 import type { Task, Employee } from '../utils/api';
+import type { User as AuthUser } from '../types/auth';
 import { findBestEmployeesForTask } from '../utils/skillMatching';
 import { AddEmployee } from './AddEmployee';
 import type { UserRole } from '../types/auth';
 import { canManageTasks } from '../utils/permissions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 interface TaskManagementProps {
   refreshKey?: number;
   onTaskCreated?: () => void;
   userRole?: UserRole;
+  currentUser?: AuthUser | null;
 }
 
-export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps) {
-  const canEdit = canManageTasks(userRole);
+export function TaskManagement({ refreshKey = 0, userRole, currentUser }: TaskManagementProps) {
+  // HR cannot create or assign tasks
+  // Only Manager and Admin can create/assign tasks
+  const canEdit = userRole === 'admin' || userRole === 'manager';
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,6 +48,7 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
   const [showAddEmployeeDialog, setShowAddEmployeeDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'active' | 'archive'>('active');
 
   // Form states for creating task
   const [title, setTitle] = useState('');
@@ -40,6 +56,51 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
   const [due_date, setdue_date] = useState('');
   const [estimatedHours, setEstimatedHours] = useState(0);
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  // Get unique skills from employees based on role
+  const availableSkills = useMemo(() => {
+    const skillsSet = new Set<string>();
+    
+    if (!currentUser) {
+      // If no current user, show all skills
+      employees.forEach(emp => {
+        emp.skills?.forEach(skill => {
+          if (skill.name) skillsSet.add(skill.name);
+        });
+      });
+    } else {
+      // Filter employees based on who can be assigned tasks
+      employees.forEach(emp => {
+        let shouldIncludeSkills = false;
+        
+        // For Admin: show skills from self + employees (exclude other admins/HR/managers)
+        if (currentUser.role === 'admin') {
+          shouldIncludeSkills = emp.id === currentUser.id || emp.role === 'employee';
+        }
+        // For HR: show skills from self + employees (exclude other HR/admins/managers)
+        else if (currentUser.role === 'hr') {
+          shouldIncludeSkills = emp.id === currentUser.id || emp.role === 'employee';
+        } 
+        // For Manager: show skills from self + employees (exclude HR/admin)
+        else if (currentUser.role === 'manager') {
+          shouldIncludeSkills = emp.id === currentUser.id || emp.role === 'employee';
+        }
+        // For Employee: only show employee skills
+        else if (currentUser.role === 'employee') {
+          shouldIncludeSkills = emp.role === 'employee';
+        }
+        
+        if (shouldIncludeSkills) {
+          emp.skills?.forEach(skill => {
+            if (skill.name) skillsSet.add(skill.name);
+          });
+        }
+      });
+    }
+    
+    return Array.from(skillsSet).sort();
+  }, [employees, currentUser]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,15 +121,69 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
     fetchData();
   }, [refreshKey]);
 
-  const filteredTasks = tasks.filter(task => {
+  // Auto-delete completed tasks older than 24 hours
+  useEffect(() => {
+    const deleteOldCompletedTasks = async () => {
+      const now = new Date().getTime();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      
+      const tasksToDelete = tasks.filter(task => {
+        if (task.status === 'completed' && task.completed_at) {
+          const completedTime = new Date(task.completed_at).getTime();
+          return now - completedTime > oneDayMs;
+        }
+        return false;
+      });
+
+      for (const task of tasksToDelete) {
+        try {
+          await apiService.deleteTask(task.id);
+        } catch (error) {
+          console.error('Failed to auto-delete task:', error);
+        }
+      }
+
+      if (tasksToDelete.length > 0) {
+        setTasks(prev => prev.filter(t => !tasksToDelete.includes(t)));
+      }
+    };
+
+    const interval = setInterval(deleteOldCompletedTasks, 60000); // Check every minute
+    deleteOldCompletedTasks(); // Run immediately
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  // Filter tasks based on role visibility
+  const visibleTasks = React.useMemo(() => {
+    if (!currentUser) return tasks;
+    
+    // Manager and Admin see all tasks
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+      return tasks;
+    }
+    
+    // HR and Employee only see tasks assigned to them
+    if (currentUser.role === 'hr' || currentUser.role === 'employee') {
+      return tasks.filter(task => task.assigned_to === currentUser.id);
+    }
+    
+    return tasks;
+  }, [tasks, currentUser]);
+
+  const filteredTasks = visibleTasks.filter(task => {
     const matchesSearch =
       (task.title ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (task.description ?? '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus;
     const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
+    
+    // Filter by active/archive tab
+    const isCompleted = task.status === 'completed';
+    const matchesTab = activeTab === 'archive' ? isCompleted : !isCompleted;
 
-    return matchesSearch && matchesStatus && matchesPriority;
+    return matchesSearch && matchesStatus && matchesPriority && matchesTab;
   });
 
   const getStatusColor = (status: string) => {
@@ -116,6 +231,29 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
     }
   };
 
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      const updates: Partial<Task> = { status: newStatus };
+      
+      // If completing, set to completed and record completion time
+      if (newStatus === 'completed') {
+        updates.progress = 100;
+        updates.completed_at = new Date().toISOString();
+      }
+      
+      const updatedTask = await apiService.updateTask(taskId, updates);
+      setTasks(prevTasks =>
+        prevTasks.map(task =>
+          task.id === taskId ? updatedTask : task
+        )
+      );
+      toast.success(`Task status updated to ${newStatus}!`);
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      toast.error('Failed to update task status.');
+    }
+  };
+
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(emp => emp.id === employeeId);
     return employee ? employee.name : 'Unknown Employee';
@@ -124,6 +262,13 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const requiredSkills = selectedSkills.map(skillName => ({
+        name: skillName,
+        level: 3, // Default level
+        importance: 'required' as const,
+        category: 'general' // Default category
+      }));
+
       const newTask = await apiService.addTask({
         title,
         description: description || null,
@@ -132,7 +277,7 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
         due_date: due_date || null,
         estimatedHours,
         assigned_to: null,
-        requiredSkills: [],
+        requiredSkills,
       });
 
       setTasks((prev) => [...prev, newTask]);
@@ -144,6 +289,7 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
       setdue_date('');
       setEstimatedHours(0);
       setPriority('medium');
+      setSelectedSkills([]);
       toast.success('Task created successfully!');
     } catch (err) {
       console.error('Failed to create task:', err);
@@ -172,7 +318,7 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
 
       {/* Create Task Dialog */}
       <Dialog open={showNewTaskDialog} onOpenChange={setShowNewTaskDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Task</DialogTitle>
             <DialogDescription>
@@ -215,6 +361,47 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
               </select>
             </div>
 
+            <div>
+              <Label>Required Skills (Optional)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Select skills to find best matching employees
+              </p>
+              <div className="border rounded p-3 max-h-48 overflow-y-auto space-y-2">
+                {availableSkills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    No specific skills required - anyone can be assigned this task
+                  </p>
+                ) : (
+                  availableSkills.map((skill) => (
+                    <label key={skill} className="flex items-center space-x-2 cursor-pointer hover:bg-accent p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedSkills.includes(skill)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSkills([...selectedSkills, skill]);
+                          } else {
+                            setSelectedSkills(selectedSkills.filter((s) => s !== skill));
+                          }
+                        }}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">{skill}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              {selectedSkills.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedSkills.map((skill) => (
+                    <Badge key={skill} variant="secondary">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button type="submit">Save Task</Button>
           </form>
         </DialogContent>
@@ -237,6 +424,22 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
           />
         </DialogContent>
       </Dialog>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={activeTab === 'active' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('active')}
+        >
+          Active Tasks
+        </Button>
+        <Button
+          variant={activeTab === 'archive' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('archive')}
+        >
+          Archive
+        </Button>
+      </div>
 
       {/* Filters */}
       <Card>
@@ -315,8 +518,20 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
                         <TaskDetailsDialog
                           task={selectedTask}
                           onAssign={assignTaskToEmployee}
+                          onDelete={async (taskId) => {
+                            try {
+                              await apiService.deleteTask(taskId);
+                              setTasks(prev => prev.filter(t => t.id !== taskId));
+                              toast.success('Task deleted successfully!');
+                            } catch (error) {
+                              console.error('Failed to delete task:', error);
+                              toast.error('Failed to delete task.');
+                            }
+                          }}
+                          onUpdateStatus={updateTaskStatus}
                           employees={employees}
                           canAssign={canEdit}
+                          currentUser={currentUser}
                         />
                       )}
                     </DialogContent>
@@ -343,8 +558,74 @@ export function TaskManagement({ refreshKey = 0, userRole }: TaskManagementProps
   );
 }
 
-function TaskDetailsDialog({ task, onAssign, employees, canAssign = true }: { task: Task; onAssign: (taskId: string, employeeId: string) => void; employees: Employee[]; canAssign?: boolean }) {
-  const bestMatches = findBestEmployeesForTask(employees, task);
+function TaskDetailsDialog({ 
+  task, 
+  onAssign, 
+  onDelete,
+  onUpdateStatus,
+  employees, 
+  canAssign = true,
+  currentUser 
+}: { 
+  task: Task; 
+  onAssign: (taskId: string, employeeId: string) => void; 
+  onDelete: (taskId: string) => void;
+  onUpdateStatus?: (taskId: string, newStatus: string) => void;
+  employees: Employee[]; 
+  canAssign?: boolean;
+  currentUser?: AuthUser | null;
+}) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  
+  // Define role hierarchy (lower number = higher role)
+  const roleHierarchy: Record<string, number> = {
+    'admin': 0,
+    'hr': 1,
+    'manager': 2,
+    'employee': 3
+  };
+
+  // Filter employees based on role hierarchy and assignment permissions
+  const assignableEmployees = React.useMemo(() => {
+    if (!currentUser) return employees;
+    
+    const currentRoleLevel = roleHierarchy[currentUser.role] ?? 3;
+    
+    return employees.filter(emp => {
+      const empRoleLevel = roleHierarchy[emp.role] ?? 3;
+      
+      // Employee can only assign to employees (not to HR, Manager, Admin)
+      if (currentUser.role === 'employee') {
+        return emp.role === 'employee';
+      }
+      
+      // Manager can assign to themselves + employees (not HR or Admin)
+      if (currentUser.role === 'manager') {
+        return emp.id === currentUser.id || emp.role === 'employee';
+      }
+      
+      // Admin can assign to anyone
+      if (currentUser.role === 'admin') {
+        return true;
+      }
+      
+      // HR and Employee cannot assign tasks (should not reach here)
+      return false;
+    });
+  }, [employees, currentUser]);
+
+  // Filter by skill matching
+  const bestMatches = React.useMemo(() => {
+    const matches = findBestEmployeesForTask(assignableEmployees, task);
+    
+    // If task has required skills, only show employees with matching skills
+    if (task.requiredSkills && task.requiredSkills.length > 0) {
+      return matches.filter(match => match.matchScore > 0);
+    }
+    
+    // If no required skills, show all assignable employees
+    return matches;
+  }, [assignableEmployees, task]);
 
   const getMatchScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -366,7 +647,67 @@ function TaskDetailsDialog({ task, onAssign, employees, canAssign = true }: { ta
             <h3 className="font-semibold text-lg">{task.title}</h3>
             <p className="text-muted-foreground">{task.description}</p>
           </div>
+
+          {/* Status Update Dropdown - Only show if user is assigned to this task */}
+          {currentUser && task.assigned_to === currentUser.id && task.status !== 'completed' && (
+            <div className="pt-4 border-t">
+              <label className="block text-sm font-medium mb-2">Update Task Status</label>
+              <Select
+                value={task.status}
+                onValueChange={(value) => {
+                  if (onUpdateStatus) {
+                    onUpdateStatus(task.id, value);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {canAssign && (
+            <div className="flex justify-end pt-4 border-t">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Task
+              </Button>
+            </div>
+          )}
         </div>
+        
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the task "{task.title}". This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  onDelete(task.id);
+                  setShowDeleteConfirm(false);
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </TabsContent>
 
       <TabsContent value="recommendations" className="space-y-4">
@@ -375,47 +716,57 @@ function TaskDetailsDialog({ task, onAssign, employees, canAssign = true }: { ta
         </div>
 
         <div className="space-y-4">
-          {bestMatches.map((match) => (
-            <Card key={match.employee.id} className="relative">
-              <CardContent className="pt-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-4">
-                    <Avatar>
-                      <AvatarFallback>
-                        {match.employee.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h4 className="font-medium">{match.employee.name}</h4>
-                      <p className="text-sm text-muted-foreground">{match.employee.position}</p>
-                      <Badge variant="outline" className="mt-1">{match.employee.department}</Badge>
-                    </div>
-                  </div>
-
-                  <div className="text-right space-y-2">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <Star className="h-4 w-4 text-yellow-500" />
-                        <span className={`font-semibold ${getMatchScoreColor(match.matchScore)}`}>
-                          {match.matchScore}% match
-                        </span>
+          {bestMatches.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">
+                  No matching employees found. Try adjusting the task requirements or skills.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            bestMatches.map((match) => (
+              <Card key={match.employee.id} className="relative">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Avatar>
+                        <AvatarFallback>
+                          {match.employee.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="font-medium">{match.employee.name}</h4>
+                        <p className="text-sm text-muted-foreground">{match.employee.position}</p>
+                        <Badge variant="outline" className="mt-1">{match.employee.department}</Badge>
                       </div>
                     </div>
 
-                    {canAssign && (
-                      <Button
-                        size="sm"
-                        onClick={() => onAssign(task.id, match.employee.id)}
-                        disabled={task.assigned_to === match.employee.id}
-                      >
-                        {task.assigned_to === match.employee.id ? 'Assigned' : 'Assign Task'}
-                      </Button>
-                    )}
+                    <div className="text-right space-y-2">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <Star className="h-4 w-4 text-yellow-500" />
+                          <span className={`font-semibold ${getMatchScoreColor(match.matchScore)}`}>
+                            {match.matchScore}% match
+                          </span>
+                        </div>
+                      </div>
+
+                      {canAssign && (
+                        <Button
+                          size="sm"
+                          onClick={() => onAssign(task.id, match.employee.id)}
+                          disabled={task.assigned_to === match.employee.id}
+                        >
+                          {task.assigned_to === match.employee.id ? 'Assigned' : 'Assign Task'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </TabsContent>
     </Tabs>

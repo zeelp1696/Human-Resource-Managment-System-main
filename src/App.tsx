@@ -245,6 +245,7 @@ export default function App() {
             refreshKey={refreshTasks}
             onTaskCreated={() => setRefreshTasks((k) => k + 1)}
             userRole={userRole}
+            currentUser={authState.user}
           />
         );
       case 'attendance':

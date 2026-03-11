@@ -31,12 +31,7 @@ export function Login({ onLogin, onShowSignUp }: LoginProps) {
     try {
       const { user } = await apiService.login(email, password);
 
-      // Show toast if user needs to change password
-      if (user.needsPasswordChange) {
-        toast.info('Welcome! Please change your password in Settings → Security', {
-          duration: 6000,
-        });
-      }
+      // Removed password change notification - user can change in settings if needed
 
       onLogin(user);
     } catch (error) {
