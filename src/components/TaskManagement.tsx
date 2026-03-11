@@ -247,6 +247,7 @@ export function TaskManagement({ refreshKey = 0, userRole, currentUser }: TaskMa
           task.id === taskId ? updatedTask : task
         )
       );
+      setSelectedTask(prev => prev?.id === taskId ? updatedTask : prev);
       toast.success(`Task status updated to ${newStatus}!`);
     } catch (error) {
       console.error('Failed to update task status:', error);
