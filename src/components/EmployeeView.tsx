@@ -76,7 +76,7 @@ export function EmployeeView({ user, onLogout }: EmployeeViewProps) {
         // If admin has enabled employee task access, show full task board
         // so employees can create and assign tasks to each other
         return empTaskAccess
-          ? <TaskManagement userRole="manager" />
+          ? <TaskManagement userRole="employee" currentUser={user} />
           : <MyTasks user={user} employeeId={employeeId} />;
       case 'profile':
         return <MyProfile user={user} />;

@@ -634,6 +634,48 @@ function TaskDetailsDialog({
     return 'text-red-600';
   };
 
+  // Employee viewing a task assigned to them → only show Task Details + status dropdown
+  // Match by id OR by email (handles auth UUID vs DB UUID mismatch)
+  const myEmployeeRecord = currentUser
+    ? employees.find(e => e.id === currentUser.id || e.email === currentUser.email)
+    : null;
+  const myEmployeeId = myEmployeeRecord?.id ?? currentUser?.id;
+  const isTaskAssignedToMe = currentUser?.role === 'employee' && task.assigned_to === myEmployeeId;
+
+  if (isTaskAssignedToMe) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-lg">{task.title}</h3>
+          <p className="text-muted-foreground">{task.description}</p>
+        </div>
+        {task.status !== 'completed' && (
+          <div className="pt-4 border-t">
+            <label className="block text-sm font-medium mb-2">Update Task Status</label>
+            <Select
+              value={task.status}
+              onValueChange={(value) => onUpdateStatus?.(task.id, value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="assigned">Assigned</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {task.status === 'completed' && (
+          <div className="pt-4 border-t text-sm text-muted-foreground">
+            ✅ This task is completed.
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <Tabs defaultValue="details" className="space-y-4">
       <TabsList className="grid w-full grid-cols-2">
@@ -649,7 +691,7 @@ function TaskDetailsDialog({
           </div>
 
           {/* Status Update Dropdown - Only show if user is assigned to this task */}
-          {currentUser && task.assigned_to === currentUser.id && task.status !== 'completed' && (
+          {currentUser && task.assigned_to === myEmployeeId && task.status !== 'completed' && (
             <div className="pt-4 border-t">
               <label className="block text-sm font-medium mb-2">Update Task Status</label>
               <Select
