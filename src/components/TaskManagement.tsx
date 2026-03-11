@@ -36,9 +36,10 @@ interface TaskManagementProps {
 }
 
 export function TaskManagement({ refreshKey = 0, userRole, currentUser }: TaskManagementProps) {
-  // HR cannot create or assign tasks
-  // Only Manager and Admin can create/assign tasks
-  const canEdit = userRole === 'admin' || userRole === 'manager';
+  // Check if admin has enabled task creation for employees
+  const employeeTaskAccess = localStorage.getItem("employeeTaskAccess") === "true";
+  // Admin/Manager can always create tasks; employees only when admin enables it
+  const canEdit = userRole === 'admin' || userRole === 'manager' || (userRole === 'employee' && employeeTaskAccess);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -308,6 +309,12 @@ export function TaskManagement({ refreshKey = 0, userRole, currentUser }: TaskMa
           </p>
         </div>
         <div className="flex space-x-2">
+          {userRole === 'admin' && (
+            <Button variant="outline" onClick={() => setShowAddEmployeeDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Employee
+            </Button>
+          )}
           {canEdit && (
             <Button onClick={() => setShowNewTaskDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
